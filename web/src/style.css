@@ -1,0 +1,665 @@
+/* tsnotes styling.
+ *
+ * Light and dark both come from one set of tokens, switched by
+ * prefers-color-scheme. No framework, no CDN: the page is served with a strict
+ * Content-Security-Policy of 'self' and everything ships in one bundle. */
+
+:root {
+  --bg: #fdfdfc;
+  --bg-raised: #ffffff;
+  --bg-sunken: #f4f4f2;
+  --border: #e3e3df;
+  --text: #1f1f1d;
+  --text-muted: #6c6c66;
+  --accent: #4a6fa5;
+  --accent-soft: #e8eef7;
+  --warn: #9a6a00;
+  --warn-soft: #fdf3dc;
+  --error: #a33;
+  --error-soft: #fbeaea;
+  --mark: #fff2a8;
+  --tag-bg: #eceaf6;
+  --tag-fg: #5b4a99;
+  --paper: #ffffff;
+  --cursor: #1a4fa0;
+  --selection: #bcd4f5;
+  --active-line: #f0f3f8;
+  --match: #dde7c8;
+
+  --font-ui: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-text: ui-serif, Georgia, "Iowan Old Style", "Times New Roman", serif;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+
+  /* Layout.
+   *
+   * The sidebar and the page margins are both sized against the viewport, so a
+   * laptop and a 4K monitor each get proportionate chrome rather than the same
+   * fixed pixels. --measure is the width of the text itself, chosen by the
+   * width control; it caps line length without stranding the page in a narrow
+   * column, which is what a fixed 46rem looked like on a wide screen. */
+  --sidebar-w: clamp(12rem, 18vw, 20rem);
+  /* --measure is the width of the text itself, not of the box around it: the
+     padding is added on top, below. Wide grows with the window so the page
+     fills a laptop screen instead of floating in it, and only stops growing
+     once lines would get too long to track across. */
+  --measure-wide: clamp(48rem, 62vw, 76rem);
+  --measure-comfortable: 42rem;
+  --measure: var(--measure-wide);
+  --page-pad: clamp(1.25rem, 5vw, 6rem);
+  /* No cap by default: the page fills the window. The width control narrows it
+     for long-form reading, and only then does --measure come into play.
+     CodeMirror puts box-sizing: border-box on the content, so a cap written
+     directly against --measure would have the margins eaten by the padding. */
+  --measure-box: none;
+  --radius: 6px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16171a;
+    --bg-raised: #1c1e22;
+    --bg-sunken: #121316;
+    --border: #2c2f35;
+    --text: #e6e6e3;
+    --text-muted: #9a9a94;
+    --accent: #7fa5dd;
+    --accent-soft: #1f2b3c;
+    --warn: #e0b050;
+    --warn-soft: #2e2716;
+    --error: #e08585;
+    --error-soft: #2e1b1b;
+    --mark: #5c5320;
+    --tag-bg: #262238;
+    --tag-fg: #b6a8ee;
+    --paper: #191b1f;
+    --cursor: #8fc0ff;
+    --selection: #2d4468;
+    --active-line: #1d2026;
+    --match: #3a4231;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.muted { color: var(--text-muted); }
+.empty { padding: 0.75rem 1rem; font-size: 0.85rem; }
+.error-text { color: var(--error); padding: 0.75rem 1rem; }
+.spacer { flex: 1; }
+.hidden { display: none !important; }
+
+.app {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+  /* dvh rather than vh: on mobile the browser's own chrome shrinks the viewport,
+     and vh would leave the bottom of the page permanently cut off. */
+  height: 100dvh;
+  overflow: hidden;
+}
+
+/* The width control picks how wide the text runs. Full is the default and caps
+ * nothing; the other two trade some of the page back for a shorter line. */
+.app[data-width="wide"],
+.app[data-width="comfortable"] {
+  --measure-box: calc(var(--measure) + 2 * var(--page-pad));
+}
+.app[data-width="wide"] { --measure: var(--measure-wide); }
+.app[data-width="comfortable"] { --measure: var(--measure-comfortable); }
+.app[data-width="full"] { --measure-box: none; }
+.app.is-loading { visibility: hidden; }
+
+.app-error {
+  display: grid;
+  place-items: center;
+  padding: 2rem;
+}
+.error-box {
+  max-width: 34rem;
+  padding: 1.5rem 1.75rem;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.error-box h1 { margin-top: 0; font-size: 1.2rem; }
+
+/* --- sidebar --- */
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: var(--bg-sunken);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.4rem 0.5rem;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+.brand-mark { font-size: 1.1rem; }
+
+.search-btn {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  color: var(--text-muted);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.85rem;
+}
+.search-btn:hover { border-color: var(--accent); }
+
+.sidebar-actions { display: flex; gap: 0.4rem; }
+.new-btn, .ghost-btn {
+  flex: 1;
+  padding: 0.4rem;
+  border-radius: var(--radius);
+  font-size: 0.85rem;
+  border: 1px solid transparent;
+}
+.new-btn { background: var(--accent); color: #fff; }
+.new-btn:hover { filter: brightness(1.08); }
+.ghost-btn { border-color: var(--border); background: var(--bg-raised); }
+.ghost-btn:hover { border-color: var(--accent); }
+
+.sidebar-heading {
+  margin: 0.75rem 0 0.25rem;
+  padding: 0 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.note-list { display: flex; flex-direction: column; }
+.note-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.35rem 0.5rem;
+  text-align: left;
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.note-item:hover { background: var(--bg-raised); }
+.note-item.is-active { background: var(--accent-soft); }
+.note-item-title {
+  font-size: 0.87rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.note-item-path {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tag-list { display: flex; flex-wrap: wrap; gap: 0.25rem; padding: 0 0.4rem; }
+.tag-item {
+  display: inline-flex;
+  gap: 0.3rem;
+  padding: 0.15rem 0.45rem;
+  font-size: 0.78rem;
+  color: var(--tag-fg);
+  background: var(--tag-bg);
+  border-radius: 999px;
+}
+.tag-item:hover { filter: brightness(1.06); }
+.tag-count { opacity: 0.65; }
+
+.sidebar-foot {
+  margin-top: auto;
+  padding: 0.6rem 0.4rem 0.2rem;
+  font-size: 0.78rem;
+  border-top: 1px solid var(--border);
+}
+
+/* --- main --- */
+
+/* The main column is the page itself: a single surface filling the window
+ * beside the sidebar, rather than a card floating in the middle of it. */
+.main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--paper);
+}
+
+.note-header { border-bottom: 1px solid var(--border); }
+
+/* An inner rail matching the text's own box, so the title sits above the first
+ * character rather than out in the margin. Doing it this way rather than with a
+ * calc keeps working when the measure is uncapped. */
+.note-header-inner,
+.backlinks-inner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  max-width: var(--measure-box);
+  margin: 0 auto;
+  padding: 0.6rem var(--page-pad);
+}
+
+/* Opens the sidebar when it is a drawer. Hidden until then. */
+.menu-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  margin-left: -0.35rem;
+  border-radius: var(--radius);
+  font-size: 1.1rem;
+  line-height: 1;
+}
+.menu-btn:hover { background: var(--bg-sunken); }
+
+.width-toggle {
+  padding: 0.25rem 0.6rem;
+  font-size: 0.78rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+}
+.width-toggle:hover { border-color: var(--accent); }
+
+/* Covers the page while the drawer is open, and closes it when tapped. */
+.scrim {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 15;
+  background: rgb(0 0 0 / 35%);
+}
+.note-title {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.note-status {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  min-width: 4.5rem;
+  text-align: right;
+}
+.status-saving { color: var(--accent); }
+.status-unsaved { color: var(--warn); }
+.status-error, .status-conflict { color: var(--error); }
+
+.mode-toggle {
+  padding: 0.25rem 0.6rem;
+  font-size: 0.78rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+}
+.mode-toggle:hover { border-color: var(--accent); }
+.mode-toggle.is-source { background: var(--accent-soft); border-color: var(--accent); }
+
+.banner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 1.25rem;
+  font-size: 0.85rem;
+  border-bottom: 1px solid var(--border);
+}
+.banner-warn { background: var(--warn-soft); color: var(--warn); }
+.banner-error { background: var(--error-soft); color: var(--error); }
+.banner-action {
+  padding: 0.2rem 0.55rem;
+  border: 1px solid currentColor;
+  border-radius: var(--radius);
+  font-size: 0.8rem;
+}
+.banner-dismiss { margin-left: auto; font-size: 1.1rem; line-height: 1; opacity: 0.7; }
+
+.editor-host { flex: 1; min-height: 0; overflow: auto; }
+
+.backlinks {
+  border-top: 1px solid var(--border);
+  max-height: 12rem;
+  overflow-y: auto;
+}
+.backlinks-inner {
+  display: block;
+  padding-bottom: 1rem;
+}
+.backlinks:empty { display: none; }
+.backlinks h3 {
+  margin: 0.9rem 0 0.4rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.backlink-list { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.backlink {
+  padding: 0.2rem 0.5rem;
+  font-size: 0.82rem;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: var(--radius);
+}
+
+/* --- search palette --- */
+
+.palette-overlay {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: start center;
+  padding-top: 12vh;
+  background: rgb(0 0 0 / 35%);
+  z-index: 50;
+}
+.palette {
+  width: min(42rem, 92vw);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 20px 50px rgb(0 0 0 / 25%);
+  overflow: hidden;
+}
+.palette-input {
+  width: 100%;
+  padding: 0.85rem 1rem;
+  font: inherit;
+  font-size: 1rem;
+  color: inherit;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  outline: none;
+}
+.palette-results { max-height: 55vh; overflow-y: auto; }
+.palette-hit {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  width: 100%;
+  padding: 0.55rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.palette-hit:hover { background: var(--accent-soft); }
+.palette-hit-title { font-weight: 600; font-size: 0.9rem; }
+.palette-hit-owner {
+  margin-left: 0.5rem;
+  padding: 0.05rem 0.35rem;
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: var(--tag-fg);
+  background: var(--tag-bg);
+  border-radius: 999px;
+}
+.palette-hit-snippet {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+.palette-hit-snippet mark { background: var(--mark); color: inherit; border-radius: 2px; }
+.palette-hit-path { font-size: 0.72rem; color: var(--text-muted); opacity: 0.8; }
+
+/* --- CodeMirror --- */
+
+.cm-editor { height: 100%; background: var(--bg); }
+.cm-editor.cm-focused { outline: none; }
+.cm-editor .cm-scroller {
+  font-family: var(--font-text);
+  /* Nudges up a little on a large screen, the way a book set for a big page
+     would, without becoming a different design. */
+  font-size: clamp(1rem, 0.96rem + 0.2vw, 1.15rem);
+  line-height: 1.75;
+  padding: 0;
+}
+/* CodeMirror sets padding: 4px 0 on .cm-content at a higher specificity than a
+ * bare class selector, so without the scope here the horizontal padding was
+ * being dropped and text sat flush against the edge of the column. */
+/* CodeMirror sets padding: 4px 0 on .cm-content at a higher specificity than a
+ * bare class selector, so without the scope here the horizontal padding was
+ * being dropped and text sat flush against the edge of the column.
+ *
+ * The trailing space is deliberate: it lets the last line be scrolled up to a
+ * comfortable height instead of sitting against the bottom of the window. */
+.cm-editor .cm-content {
+  max-width: var(--measure-box);
+  margin: 0 auto;
+  padding: 1.5rem var(--page-pad) 45vh;
+}
+.cm-editor .cm-line { padding: 0 2px; }
+.cm-editor .cm-gutters { display: none; }
+
+/* Cursor and selection.
+ *
+ * Every selector here goes through .cm-editor on purpose. CodeMirror's base
+ * theme ships its own rules for these, scoped by a generated class, which puts
+ * them at a specificity of 0,2,0. A bare `.cm-cursor { ... }` is 0,1,0 and
+ * silently loses, which is how the caret ended up as CodeMirror's default
+ * 1.2px black hairline: the rules below were being written and then overridden.
+ *
+ * The caret is deliberately chunky. This editor renders markdown in place, so
+ * the page is full of shapes competing for your eye and a hairline disappears
+ * into them. */
+.cm-editor .cm-cursorLayer .cm-cursor,
+.cm-editor .cm-dropCursor {
+  /* Longhands rather than the border-left shorthand: a custom property inside a
+   * shorthand is harder for tooling to reason about, and keeping the width as a
+   * plain value means the cascade can be asserted in a test. */
+  border-left-width: 2.5px;
+  border-left-style: solid;
+  border-left-color: var(--cursor);
+  border-radius: 1px;
+  margin-left: -1.25px;
+}
+
+/* CodeMirror animates the whole cursor layer, at the rate drawSelection was
+ * configured with, so there is no blink of our own to add here. It does not
+ * check whether the reader asked for less motion, so we do. */
+@media (prefers-reduced-motion: reduce) {
+  .cm-editor.cm-focused > .cm-scroller > .cm-cursorLayer { animation: none; }
+}
+
+.cm-editor .cm-selectionLayer .cm-selectionBackground,
+.cm-editor .cm-content ::selection {
+  background: var(--selection);
+}
+
+/* The line you are on. Live preview shows raw markdown here and rendered
+ * markdown everywhere else, so marking it explains why it looks different. */
+.cm-editor .cm-line.cm-activeLine { background: var(--active-line); }
+/* A selection has to win over the active-line tint, or selected text on the
+ * current line looks unselected. */
+.cm-editor .cm-activeLine .cm-selectionBackground { background: var(--selection); }
+
+/* Matches of the word under the cursor, from highlightSelectionMatches. */
+.cm-editor .cm-selectionMatch { background: var(--match); border-radius: 2px; }
+
+/* Autocomplete tooltips are the one exception to scoping through .cm-editor:
+ * CodeMirror renders them outside the editor element, so that scope would never
+ * match. Doubling the class gets the same 0,2,0 specificity as CodeMirror's own
+ * rule, and this stylesheet loads after the one CodeMirror injects, so it wins
+ * the tie. */
+.cm-tooltip.cm-tooltip-autocomplete {
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+}
+.cm-tooltip.cm-tooltip-autocomplete ul li[aria-selected] {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+/* Live preview: block-level rendering */
+
+.cm-tsn-h1, .cm-tsn-h2, .cm-tsn-h3, .cm-tsn-h4, .cm-tsn-h5, .cm-tsn-h6 {
+  font-family: var(--font-ui);
+  font-weight: 650;
+  line-height: 1.3;
+}
+.cm-tsn-h1 { font-size: 1.9em; margin-top: 0.4em; }
+.cm-tsn-h2 { font-size: 1.5em; margin-top: 0.4em; }
+.cm-tsn-h3 { font-size: 1.25em; }
+.cm-tsn-h4 { font-size: 1.1em; }
+.cm-tsn-h5, .cm-tsn-h6 { font-size: 1em; color: var(--text-muted); }
+
+.cm-tsn-quote {
+  padding-left: 0.9rem;
+  border-left: 3px solid var(--border);
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.cm-tsn-fence {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  background: var(--bg-sunken);
+}
+
+.cm-tsn-rule {
+  display: inline-block;
+  width: 100%;
+  margin: 0.6em 0;
+  border: none;
+  border-top: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+/* Live preview: inline rendering */
+
+.cm-tsn-strong { font-weight: 700; }
+.cm-tsn-em { font-style: italic; }
+.cm-tsn-strike { text-decoration: line-through; opacity: 0.7; }
+.cm-tsn-code {
+  padding: 0.1em 0.32em;
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  background: var(--bg-sunken);
+  border-radius: 4px;
+}
+.cm-tsn-link { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+
+.cm-tsn-wikilink {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  cursor: pointer;
+}
+.cm-tsn-wikilink:hover { border-bottom-color: var(--accent); }
+.cm-tsn-unresolved {
+  color: var(--error);
+  border-bottom-style: dashed;
+  border-bottom-color: color-mix(in srgb, var(--error) 45%, transparent);
+}
+
+.cm-tsn-tag {
+  padding: 0.05em 0.45em;
+  font-family: var(--font-ui);
+  font-size: 0.82em;
+  color: var(--tag-fg);
+  background: var(--tag-bg);
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.cm-tsn-tag:hover { filter: brightness(1.08); }
+
+.cm-tsn-bullet { display: inline-block; width: 1ch; color: var(--text-muted); }
+.cm-tsn-task { margin-right: 0.35rem; vertical-align: middle; accent-color: var(--accent); }
+
+.cm-tsn-embed { display: block; margin: 0.5em 0; }
+.cm-tsn-embed img {
+  max-width: 100%;
+  max-height: 60vh;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+
+/* Source mode: token colours, which also apply inside fenced code blocks */
+
+.cm-tsn-tok-h1, .cm-tsn-tok-h2, .cm-tsn-tok-h3, .cm-tsn-tok-h4 { font-weight: 650; }
+.cm-tsn-tok-strong { font-weight: 700; }
+.cm-tsn-tok-em { font-style: italic; }
+.cm-tsn-tok-strike { text-decoration: line-through; }
+.cm-tsn-tok-code { font-family: var(--font-mono); font-size: 0.9em; }
+.cm-tsn-tok-link, .cm-tsn-tok-wikilink { color: var(--accent); }
+.cm-tsn-tok-url { color: var(--text-muted); text-decoration: underline; }
+.cm-tsn-tok-quote { color: var(--text-muted); font-style: italic; }
+.cm-tsn-tok-list { color: var(--text-muted); }
+.cm-tsn-tok-mark { color: var(--text-muted); opacity: 0.55; }
+.cm-tsn-tok-tag { color: var(--tag-fg); }
+.cm-tsn-tok-comment { color: var(--text-muted); font-style: italic; }
+.cm-tsn-tok-keyword { color: var(--tag-fg); }
+.cm-tsn-tok-string { color: var(--warn); }
+.cm-tsn-tok-number { color: var(--accent); }
+
+/* --- narrow screens --- */
+
+/* Below this the sidebar and a readable page will not both fit, so the sidebar
+ * becomes a drawer over the page. The previous version simply hid it with no
+ * way to bring it back, which made the app unusable on a phone. */
+@media (max-width: 860px) {
+  .app { grid-template-columns: minmax(0, 1fr); }
+
+  .sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: min(20rem, 82vw);
+    z-index: 20;
+    transform: translateX(-100%);
+    transition: transform 0.18s ease;
+    box-shadow: 4px 0 24px rgb(0 0 0 / 18%);
+  }
+  .app.sidebar-open .sidebar { transform: none; }
+  .app.sidebar-open .scrim { display: block; }
+
+  .menu-btn { display: inline-flex; }
+
+  /* No wide margin left to line the title up with. */
+  .note-header-inner, .backlinks-inner { padding-inline: 1rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar { transition: none; }
+}
+
+/* On a phone the width control has nothing to control, and the status text is
+ * the first thing worth losing to make room for the title. */
+@media (max-width: 560px) {
+  .width-toggle { display: none; }
+  .note-status { min-width: 0; }
+}

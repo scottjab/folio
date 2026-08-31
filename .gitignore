@@ -1,0 +1,27 @@
+# Build outputs.
+# `make build` writes ./tsnotes; `nix build` symlinks ./result.
+/tsnotes
+/result
+/result-*
+/web/dist/
+/web/node_modules/
+
+# The embedded copy of the bundle is a build artifact. Only .gitkeep is tracked,
+# so go:embed has something to match in a clean checkout and a build cannot
+# clobber a tracked file. The stub page itself lives in internal/web/stub.html,
+# which is real source.
+/internal/web/dist/*
+!/internal/web/dist/.gitkeep
+
+# Runtime state: notes, the search index, and the tailnet node's keys. None of
+# it belongs in a repository, and the tsnet directory holds credentials.
+/dev-state/
+*.db
+*.db-wal
+*.db-shm
+
+# Local tooling.
+/.direnv/
+*.test
+*.out
+*.prof
