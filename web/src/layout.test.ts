@@ -224,7 +224,7 @@ describe("the width control", () => {
   });
 
   it("ignores a stored value it does not recognise", async () => {
-    localStorage.setItem("tsnotes.width", "enormous");
+    localStorage.setItem("folio.width", "enormous");
     await startApp();
     expect(document.getElementById("app")!.dataset.width).toBe("full");
   });
@@ -234,7 +234,7 @@ describe("the width control", () => {
     const btn = document.querySelector<HTMLButtonElement>(".width-toggle")!;
     btn.click(); // full -> wide
     btn.click(); // wide -> comfortable
-    expect(localStorage.getItem("tsnotes.width")).toBe("comfortable");
+    expect(localStorage.getItem("folio.width")).toBe("comfortable");
 
     document.body.innerHTML = '<div id="app" class="app is-loading"></div>';
     await startApp();

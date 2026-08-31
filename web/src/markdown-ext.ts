@@ -163,5 +163,5 @@ function isTagBoundary(ch: number) {
   );
 }
 
-/** Every markdown extension tsnotes adds. */
-export const tsnotesMarkdown: MarkdownConfig[] = [Wikilink, Hashtag];
+/** Every markdown extension folio adds. */
+export const folioMarkdown: MarkdownConfig[] = [Wikilink, Hashtag];

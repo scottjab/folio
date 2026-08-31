@@ -1,4 +1,4 @@
-// Package config loads and validates tsnotes' settings.
+// Package config loads and validates folio' settings.
 //
 // Settings come from three places, in increasing precedence: the defaults here,
 // an optional JSON file, and then flags and environment variables. The one thing
@@ -26,7 +26,7 @@ type Agent struct {
 	ActAs string `json:"actAs"`
 }
 
-// Config is the whole of tsnotes' configuration.
+// Config is the whole of folio' configuration.
 type Config struct {
 	// Hostname is the tsnet node name, so the app lands at
 	// https://<hostname>.<tailnet>.ts.net.
@@ -86,10 +86,10 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// Default returns the configuration tsnotes runs with when told nothing.
+// Default returns the configuration folio runs with when told nothing.
 func Default() Config {
 	return Config{
-		Hostname:      "tsnotes",
+		Hostname:      "folio",
 		StateDir:      defaultStateDir(),
 		Addr:          ":443",
 		LogLevel:      "info",
@@ -102,9 +102,9 @@ func Default() Config {
 // directory if there is no home to speak of.
 func defaultStateDir() string {
 	if dir, err := os.UserHomeDir(); err == nil {
-		return filepath.Join(dir, ".local", "state", "tsnotes")
+		return filepath.Join(dir, ".local", "state", "folio")
 	}
-	return "tsnotes-state"
+	return "folio-state"
 }
 
 // Load reads a config file over the defaults. A missing file is not an error:
@@ -138,13 +138,13 @@ func (c *Config) ApplyEnv() {
 	if v := os.Getenv("TS_AUTHKEY"); v != "" {
 		c.AuthKey = v
 	}
-	if v := os.Getenv("TSNOTES_STATE_DIR"); v != "" {
+	if v := os.Getenv("FOLIO_STATE_DIR"); v != "" {
 		c.StateDir = v
 	}
-	if v := os.Getenv("TSNOTES_HOSTNAME"); v != "" {
+	if v := os.Getenv("FOLIO_HOSTNAME"); v != "" {
 		c.Hostname = v
 	}
-	if v := os.Getenv("TSNOTES_LOG_LEVEL"); v != "" {
+	if v := os.Getenv("FOLIO_LOG_LEVEL"); v != "" {
 		c.LogLevel = v
 	}
 	// systemd's LoadCredential puts secrets in a directory rather than the
@@ -213,7 +213,7 @@ func (c *Config) AgentMap() map[string]string {
 }
 
 // DatabasePath is where SQLite lives.
-func (c *Config) DatabasePath() string { return filepath.Join(c.StateDir, "tsnotes.db") }
+func (c *Config) DatabasePath() string { return filepath.Join(c.StateDir, "folio.db") }
 
 // VaultsDir contains one directory per user.
 func (c *Config) VaultsDir() string { return filepath.Join(c.StateDir, "vaults") }

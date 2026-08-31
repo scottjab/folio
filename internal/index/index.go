@@ -17,10 +17,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/scottjab/tsnotes/internal/markdown"
-	"github.com/scottjab/tsnotes/internal/store"
-	"github.com/scottjab/tsnotes/internal/vault"
-	"github.com/scottjab/tsnotes/internal/vaultpath"
+	"github.com/scottjab/folio/internal/markdown"
+	"github.com/scottjab/folio/internal/store"
+	"github.com/scottjab/folio/internal/vault"
+	"github.com/scottjab/folio/internal/vaultpath"
 )
 
 // ErrNotFound means the path is not in the index.
@@ -133,7 +133,7 @@ type Stats struct {
 	Errors []string
 }
 
-// VaultStat is a quick summary for the UI and for `tsnotes doctor`.
+// VaultStat is a quick summary for the UI and for `folio doctor`.
 type VaultStat struct {
 	Notes int `db:"notes"`
 	Tags  int `db:"tags"`
@@ -795,7 +795,7 @@ func (ix *Index) Sync(ctx context.Context, vaultID int64, v *vault.Vault) (Stats
 // feeds it after a burst of filesystem events settles.
 //
 // It compares content hashes before doing any work. That is what stops the
-// obvious feedback loop: tsnotes writes a note, fsnotify reports the write,
+// obvious feedback loop: folio writes a note, fsnotify reports the write,
 // the watcher asks for a sync, and without the hash check we would reindex a
 // note whose index entry is already correct.
 func (ix *Index) SyncPaths(ctx context.Context, vaultID int64, v *vault.Vault, paths []string) (Stats, error) {

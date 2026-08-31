@@ -24,7 +24,7 @@ import {
 import { tags as t } from "@lezer/highlight";
 
 import { livePreview, LivePreviewHandlers } from "./livepreview";
-import { hashtagTag, tsnotesMarkdown, wikilinkTag, wikilinkMarkTag } from "./markdown-ext";
+import { hashtagTag, folioMarkdown, wikilinkTag, wikilinkMarkTag } from "./markdown-ext";
 
 /** The two ways to look at the same buffer. */
 export type Mode = "preview" | "source";
@@ -43,26 +43,26 @@ export interface EditorOptions extends LivePreviewHandlers {
 }
 
 const highlight = HighlightStyle.define([
-  { tag: t.heading1, class: "cm-tsn-tok-h1" },
-  { tag: t.heading2, class: "cm-tsn-tok-h2" },
-  { tag: t.heading3, class: "cm-tsn-tok-h3" },
-  { tag: [t.heading4, t.heading5, t.heading6], class: "cm-tsn-tok-h4" },
-  { tag: t.strong, class: "cm-tsn-tok-strong" },
-  { tag: t.emphasis, class: "cm-tsn-tok-em" },
-  { tag: t.strikethrough, class: "cm-tsn-tok-strike" },
-  { tag: t.monospace, class: "cm-tsn-tok-code" },
-  { tag: t.link, class: "cm-tsn-tok-link" },
-  { tag: t.url, class: "cm-tsn-tok-url" },
-  { tag: t.quote, class: "cm-tsn-tok-quote" },
-  { tag: t.list, class: "cm-tsn-tok-list" },
-  { tag: t.processingInstruction, class: "cm-tsn-tok-mark" },
-  { tag: t.comment, class: "cm-tsn-tok-comment" },
-  { tag: t.keyword, class: "cm-tsn-tok-keyword" },
-  { tag: t.string, class: "cm-tsn-tok-string" },
-  { tag: t.number, class: "cm-tsn-tok-number" },
-  { tag: wikilinkTag, class: "cm-tsn-tok-wikilink" },
-  { tag: wikilinkMarkTag, class: "cm-tsn-tok-mark" },
-  { tag: hashtagTag, class: "cm-tsn-tok-tag" },
+  { tag: t.heading1, class: "cm-fol-tok-h1" },
+  { tag: t.heading2, class: "cm-fol-tok-h2" },
+  { tag: t.heading3, class: "cm-fol-tok-h3" },
+  { tag: [t.heading4, t.heading5, t.heading6], class: "cm-fol-tok-h4" },
+  { tag: t.strong, class: "cm-fol-tok-strong" },
+  { tag: t.emphasis, class: "cm-fol-tok-em" },
+  { tag: t.strikethrough, class: "cm-fol-tok-strike" },
+  { tag: t.monospace, class: "cm-fol-tok-code" },
+  { tag: t.link, class: "cm-fol-tok-link" },
+  { tag: t.url, class: "cm-fol-tok-url" },
+  { tag: t.quote, class: "cm-fol-tok-quote" },
+  { tag: t.list, class: "cm-fol-tok-list" },
+  { tag: t.processingInstruction, class: "cm-fol-tok-mark" },
+  { tag: t.comment, class: "cm-fol-tok-comment" },
+  { tag: t.keyword, class: "cm-fol-tok-keyword" },
+  { tag: t.string, class: "cm-fol-tok-string" },
+  { tag: t.number, class: "cm-fol-tok-number" },
+  { tag: wikilinkTag, class: "cm-fol-tok-wikilink" },
+  { tag: wikilinkMarkTag, class: "cm-fol-tok-mark" },
+  { tag: hashtagTag, class: "cm-fol-tok-tag" },
 ]);
 
 /** Completion for `[[` and `#`, driven by what the app already has loaded. */
@@ -156,7 +156,7 @@ export class Editor {
       highlightSelectionMatches(),
       rectangularSelection(),
 
-      markdown({ base: markdownLanguage, extensions: tsnotesMarkdown, codeLanguages: [] }),
+      markdown({ base: markdownLanguage, extensions: folioMarkdown, codeLanguages: [] }),
       syntaxHighlighting(highlight),
       autocompletion({ override: [completions(this.opts)], closeOnBlur: true }),
       EditorView.lineWrapping,

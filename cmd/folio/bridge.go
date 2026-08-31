@@ -14,7 +14,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// bridgeStdio connects a stdio-only MCP client to a tsnotes server over HTTP.
+// bridgeStdio connects a stdio-only MCP client to a folio server over HTTP.
 //
 // Modern MCP clients can speak Streamable HTTP and should point straight at
 // <server>/mcp. This exists for the ones that only know how to spawn a process
@@ -43,7 +43,7 @@ func bridgeStdio(ctx context.Context, server string) error {
 	}
 	up, err := remote.Connect(ctx)
 	if err != nil {
-		return fmt.Errorf("connect to %s: %w\n\nIs tsnotes running, and is this machine on the same tailnet?", endpoint, err)
+		return fmt.Errorf("connect to %s: %w\n\nIs folio running, and is this machine on the same tailnet?", endpoint, err)
 	}
 	defer up.Close()
 
@@ -54,7 +54,7 @@ func bridgeStdio(ctx context.Context, server string) error {
 	}
 	defer down.Close()
 
-	fmt.Fprintf(os.Stderr, "tsnotes: bridging stdio to %s\n", endpoint)
+	fmt.Fprintf(os.Stderr, "folio: bridging stdio to %s\n", endpoint)
 
 	// Two pumps. Whichever direction fails first tears the other down, so a
 	// client that exits does not leave the HTTP connection dangling.

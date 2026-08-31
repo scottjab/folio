@@ -7,13 +7,13 @@ import (
 	"os"
 	"text/tabwriter"
 
-	"github.com/scottjab/tsnotes/internal/config"
-	"github.com/scottjab/tsnotes/internal/index"
+	"github.com/scottjab/folio/internal/config"
+	"github.com/scottjab/folio/internal/index"
 )
 
 func runIndex(ctx context.Context, args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: tsnotes index <rebuild|sync> [flags]")
+		return fmt.Errorf("usage: folio index <rebuild|sync> [flags]")
 	}
 	switch args[0] {
 	case "rebuild":
@@ -35,7 +35,7 @@ func runIndexRebuild(ctx context.Context, args []string, full bool) error {
 	if full {
 		name = "rebuild"
 	}
-	fs := flag.NewFlagSet("tsnotes index "+name, flag.ContinueOnError)
+	fs := flag.NewFlagSet("folio index "+name, flag.ContinueOnError)
 	var only string
 	cfg, err := loadConfig(fs, args, func(fs *flag.FlagSet, _ *config.Config) {
 		fs.StringVar(&only, "vault", "", "restrict to one vault directory; default is all of them")
@@ -56,7 +56,7 @@ func runIndexRebuild(ctx context.Context, args []string, full bool) error {
 		return err
 	}
 	if len(rows) == 0 {
-		fmt.Println("No vaults yet. One is created the first time someone opens tsnotes.")
+		fmt.Println("No vaults yet. One is created the first time someone opens folio.")
 		return nil
 	}
 

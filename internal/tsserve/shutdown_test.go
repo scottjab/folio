@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/scottjab/tsnotes/internal/tsserve"
+	"github.com/scottjab/folio/internal/tsserve"
 )
 
 func quietLogger() *slog.Logger {

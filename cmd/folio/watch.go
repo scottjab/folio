@@ -6,17 +6,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/scottjab/tsnotes/internal/events"
-	"github.com/scottjab/tsnotes/internal/identity"
-	"github.com/scottjab/tsnotes/internal/vault"
-	"github.com/scottjab/tsnotes/internal/watch"
+	"github.com/scottjab/folio/internal/events"
+	"github.com/scottjab/folio/internal/identity"
+	"github.com/scottjab/folio/internal/vault"
+	"github.com/scottjab/folio/internal/watch"
 )
 
 // vaultWatchers keeps one filesystem watcher per vault, so edits made outside
-// tsnotes reach the index.
+// folio reach the index.
 //
 // Vaults are not all known at startup: one is created the first time a person
-// opens tsnotes. So this both scans for existing vaults and accepts new ones as
+// opens folio. So this both scans for existing vaults and accepts new ones as
 // they are provisioned. Without the second half, a new user's vault would go
 // unwatched until the next restart, and their Obsidian edits would silently not
 // be indexed.
@@ -67,7 +67,7 @@ func (w *vaultWatchers) start(vaultID int64, dir string, reconcile bool) {
 	}
 
 	if reconcile {
-		// The vault may have changed while tsnotes was not running: a git pull,
+		// The vault may have changed while folio was not running: a git pull,
 		// a restore, an afternoon in Obsidian.
 		if stats, err := w.app.index.Sync(w.ctx, vaultID, v); err != nil {
 			w.log.Warn("initial index sync failed", "vault", dir, "err", err)

@@ -79,14 +79,14 @@ export class App {
     const msg = err instanceof Error ? err.message : String(err);
     const hint =
       err instanceof ApiError && err.status === 503
-        ? "tsnotes could not reach tailscaled to work out who you are. It is usually back within a few seconds."
+        ? "folio could not reach tailscaled to work out who you are. It is usually back within a few seconds."
         : err instanceof ApiError && err.status === 403
           ? "This connection has no tailnet user behind it. Tagged nodes need an agent mapping in the config."
           : "";
     this.el.root.innerHTML = "";
     this.el.root.className = "app app-error";
     const box = div("error-box");
-    box.append(h("h1", {}, "tsnotes could not start"), h("p", {}, msg));
+    box.append(h("h1", {}, "folio could not start"), h("p", {}, msg));
     if (hint) box.append(h("p", { class: "muted" }, hint));
     this.el.root.append(box);
   }
@@ -100,7 +100,7 @@ export class App {
 
     const sidebar = div("sidebar");
     const brand = div("brand");
-    brand.append(h("span", { class: "brand-mark" }, "📝"), h("span", {}, "tsnotes"));
+    brand.append(h("span", { class: "brand-mark" }, "📝"), h("span", {}, "folio"));
     brand.addEventListener("click", () => this.router.go({ kind: "home" }));
 
     const searchBtn = h("button", { class: "search-btn", type: "button" }, "Search  ⌘K");
@@ -165,7 +165,7 @@ export class App {
 
     // Full by default: the page should fill the window unless you ask it not
     // to. The other two are there for long-form reading on a wide monitor.
-    const saved = readStored("tsnotes.width") as Width | null;
+    const saved = readStored("folio.width") as Width | null;
     this.applyWidth(saved && WIDTHS.includes(saved) ? saved : "full");
   }
 
@@ -187,7 +187,7 @@ export class App {
   private toggleWidth() {
     const next = WIDTHS[(WIDTHS.indexOf(this.width) + 1) % WIDTHS.length];
     this.applyWidth(next);
-    writeStored("tsnotes.width", next);
+    writeStored("folio.width", next);
   }
 
   private applyWidth(width: Width) {

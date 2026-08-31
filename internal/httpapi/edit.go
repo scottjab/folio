@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/scottjab/tsnotes/internal/notes"
+	"github.com/scottjab/folio/internal/notes"
 )
 
 type appendNoteRequest struct {

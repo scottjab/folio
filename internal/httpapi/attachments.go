@@ -7,8 +7,8 @@ import (
 	"path"
 	"strconv"
 
-	"github.com/scottjab/tsnotes/internal/share"
-	"github.com/scottjab/tsnotes/internal/vaultpath"
+	"github.com/scottjab/folio/internal/share"
+	"github.com/scottjab/folio/internal/vaultpath"
 )
 
 // handleGetAttachment serves a binary file from a vault: images embedded with

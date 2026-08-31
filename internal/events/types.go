@@ -25,7 +25,7 @@ type NoteChanged struct {
 	// OldPath is set on a move.
 	OldPath string `json:"oldPath,omitzero"`
 	SHA256  string `json:"sha256,omitzero"`
-	// ByLogin is empty for a change made outside tsnotes, which is how the UI
+	// ByLogin is empty for a change made outside folio, which is how the UI
 	// tells "you saved this" from "Obsidian saved this".
 	ByLogin string    `json:"byLogin,omitzero"`
 	At      time.Time `json:"at"`

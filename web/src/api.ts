@@ -1,4 +1,4 @@
-// Typed client for the tsnotes API.
+// Typed client for the folio API.
 //
 // There is no auth here on purpose: the tailnet authenticates the connection,
 // so requests carry no token or cookie. What they do carry is same-origin

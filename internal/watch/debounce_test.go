@@ -7,7 +7,7 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/scottjab/tsnotes/internal/watch"
+	"github.com/scottjab/folio/internal/watch"
 )
 
 // collector gathers flushed batches for assertions.

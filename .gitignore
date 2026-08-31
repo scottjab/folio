@@ -1,6 +1,6 @@
 # Build outputs.
-# `make build` writes ./tsnotes; `nix build` symlinks ./result.
-/tsnotes
+# `make build` writes ./folio; `nix build` symlinks ./result.
+/folio
 /result
 /result-*
 /web/dist/

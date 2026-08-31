@@ -10,14 +10,14 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/scottjab/tsnotes/internal/events"
-	"github.com/scottjab/tsnotes/internal/identity"
-	"github.com/scottjab/tsnotes/internal/index"
-	"github.com/scottjab/tsnotes/internal/mcpsrv"
-	"github.com/scottjab/tsnotes/internal/notes"
-	"github.com/scottjab/tsnotes/internal/share"
-	"github.com/scottjab/tsnotes/internal/store"
-	"github.com/scottjab/tsnotes/internal/vault"
+	"github.com/scottjab/folio/internal/events"
+	"github.com/scottjab/folio/internal/identity"
+	"github.com/scottjab/folio/internal/index"
+	"github.com/scottjab/folio/internal/mcpsrv"
+	"github.com/scottjab/folio/internal/notes"
+	"github.com/scottjab/folio/internal/share"
+	"github.com/scottjab/folio/internal/store"
+	"github.com/scottjab/folio/internal/vault"
 )
 
 type env struct {
@@ -199,9 +199,9 @@ func TestCreateReadRoundTrip(t *testing.T) {
 		Sha  string `json:"sha"`
 	}
 	call(t, cs, "create_note", map[string]any{
-		"path": "Projects/tsnotes.md", "content": "---\ntags: [go]\n---\n# tsnotes\n\nA notes app.\n",
+		"path": "Projects/folio.md", "content": "---\ntags: [go]\n---\n# folio\n\nA notes app.\n",
 	}, &created)
-	if created.Path != "Projects/tsnotes.md" || created.Sha == "" {
+	if created.Path != "Projects/folio.md" || created.Sha == "" {
 		t.Fatalf("create = %+v", created)
 	}
 
@@ -213,8 +213,8 @@ func TestCreateReadRoundTrip(t *testing.T) {
 		Perm    string   `json:"perm"`
 		Sha     string   `json:"sha"`
 	}
-	call(t, cs, "read_note", map[string]any{"path": "Projects/tsnotes.md"}, &read)
-	if read.Title != "tsnotes" {
+	call(t, cs, "read_note", map[string]any{"path": "Projects/folio.md"}, &read)
+	if read.Title != "folio" {
 		t.Errorf("Title = %q", read.Title)
 	}
 	if !strings.Contains(read.Content, "A notes app.") {
@@ -398,16 +398,16 @@ func TestMoveToolRewritesLinks(t *testing.T) {
 	e := newEnv(t)
 	cs := e.connect(e.alice)
 
-	mustCall(t, cs, "create_note", map[string]any{"path": "Projects/tsnotes.md", "content": "# tsnotes\n"})
-	mustCall(t, cs, "create_note", map[string]any{"path": "Daily/x.md", "content": "See [[Projects/tsnotes]].\n"})
+	mustCall(t, cs, "create_note", map[string]any{"path": "Projects/folio.md", "content": "# folio\n"})
+	mustCall(t, cs, "create_note", map[string]any{"path": "Daily/x.md", "content": "See [[Projects/folio]].\n"})
 
-	mustCall(t, cs, "move_note", map[string]any{"from": "Projects/tsnotes.md", "to": "Archive/tsnotes.md"})
+	mustCall(t, cs, "move_note", map[string]any{"from": "Projects/folio.md", "to": "Archive/folio.md"})
 
 	var read struct {
 		Content string `json:"content"`
 	}
 	call(t, cs, "read_note", map[string]any{"path": "Daily/x.md"}, &read)
-	if !strings.Contains(read.Content, "[[Archive/tsnotes]]") {
+	if !strings.Contains(read.Content, "[[Archive/folio]]") {
 		t.Errorf("inbound link not rewritten: %q", read.Content)
 	}
 }
@@ -648,7 +648,7 @@ func TestResources(t *testing.T) {
 		t.Fatal("no resource templates advertised")
 	}
 
-	res, err := cs.ReadResource(e.ctx, &mcp.ReadResourceParams{URI: "tsnotes://me/Notes/a.md"})
+	res, err := cs.ReadResource(e.ctx, &mcp.ReadResourceParams{URI: "folio://me/Notes/a.md"})
 	if err != nil {
 		t.Fatalf("ReadResource: %v", err)
 	}
@@ -665,7 +665,7 @@ func TestVaultIndexResource(t *testing.T) {
 	cs := e.connect(e.alice)
 	mustCall(t, cs, "create_note", map[string]any{"path": "a.md", "content": "---\ntags: [x]\n---\n# Alpha\n"})
 
-	res, err := cs.ReadResource(e.ctx, &mcp.ReadResourceParams{URI: "tsnotes://me/"})
+	res, err := cs.ReadResource(e.ctx, &mcp.ReadResourceParams{URI: "folio://me/"})
 	if err != nil {
 		t.Fatalf("ReadResource: %v", err)
 	}
@@ -681,7 +681,7 @@ func TestResourceRespectsPermissions(t *testing.T) {
 	bobCS := e.connect(e.bob)
 	mustCall(t, aliceCS, "create_note", map[string]any{"path": "secret.md", "content": "# Secret\n"})
 
-	if _, err := bobCS.ReadResource(e.ctx, &mcp.ReadResourceParams{URI: "tsnotes://alice-github/secret.md"}); err == nil {
+	if _, err := bobCS.ReadResource(e.ctx, &mcp.ReadResourceParams{URI: "folio://alice-github/secret.md"}); err == nil {
 		t.Error("bob read alice's note through the resource interface")
 	}
 }

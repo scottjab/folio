@@ -8,14 +8,14 @@ import (
 	"path/filepath"
 	"uuid"
 
-	"github.com/scottjab/tsnotes/internal/config"
-	"github.com/scottjab/tsnotes/internal/events"
-	"github.com/scottjab/tsnotes/internal/identity"
-	"github.com/scottjab/tsnotes/internal/index"
-	"github.com/scottjab/tsnotes/internal/notes"
-	"github.com/scottjab/tsnotes/internal/share"
-	"github.com/scottjab/tsnotes/internal/store"
-	"github.com/scottjab/tsnotes/internal/vault"
+	"github.com/scottjab/folio/internal/config"
+	"github.com/scottjab/folio/internal/events"
+	"github.com/scottjab/folio/internal/identity"
+	"github.com/scottjab/folio/internal/index"
+	"github.com/scottjab/folio/internal/notes"
+	"github.com/scottjab/folio/internal/share"
+	"github.com/scottjab/folio/internal/store"
+	"github.com/scottjab/folio/internal/vault"
 )
 
 // app is everything the commands share: the database, the vaults, the index,

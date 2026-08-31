@@ -3,13 +3,13 @@ import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { ensureSyntaxTree } from "@codemirror/language";
 import { EditorState } from "@codemirror/state";
 
-import { tsnotesMarkdown } from "./markdown-ext";
+import { folioMarkdown } from "./markdown-ext";
 
 /** Parses a document and returns every syntax node name in it. */
 function nodeNames(doc: string): string[] {
   const state = EditorState.create({
     doc,
-    extensions: [markdown({ base: markdownLanguage, extensions: tsnotesMarkdown })],
+    extensions: [markdown({ base: markdownLanguage, extensions: folioMarkdown })],
   });
   const tree = ensureSyntaxTree(state, doc.length, 5000);
   if (!tree) throw new Error("the document did not parse");
@@ -23,7 +23,7 @@ function nodeNames(doc: string): string[] {
 function textOf(doc: string, nodeName: string): string[] {
   const state = EditorState.create({
     doc,
-    extensions: [markdown({ base: markdownLanguage, extensions: tsnotesMarkdown })],
+    extensions: [markdown({ base: markdownLanguage, extensions: folioMarkdown })],
   });
   const tree = ensureSyntaxTree(state, doc.length, 5000)!;
   const out: string[] = [];
@@ -44,7 +44,7 @@ describe("the extensions load at all", () => {
     const mod = await import("./markdown-ext");
     expect(mod.wikilinkTag).toBeDefined();
     expect(mod.hashtagTag).toBeDefined();
-    expect(mod.tsnotesMarkdown.length).toBeGreaterThan(0);
+    expect(mod.folioMarkdown.length).toBeGreaterThan(0);
   });
 
   it("parses a plain document", () => {
@@ -54,11 +54,11 @@ describe("the extensions load at all", () => {
 
 describe("wikilinks", () => {
   it("parses the plain form", () => {
-    expect(textOf("See [[Projects/tsnotes]] today.\n", "Wikilink")).toEqual([
-      "[[Projects/tsnotes]]",
+    expect(textOf("See [[Projects/folio]] today.\n", "Wikilink")).toEqual([
+      "[[Projects/folio]]",
     ]);
-    expect(textOf("See [[Projects/tsnotes]] today.\n", "WikilinkTarget")).toEqual([
-      "Projects/tsnotes",
+    expect(textOf("See [[Projects/folio]] today.\n", "WikilinkTarget")).toEqual([
+      "Projects/folio",
     ]);
   });
 

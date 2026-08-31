@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/scottjab/tsnotes/internal/vaultpath"
+	"github.com/scottjab/folio/internal/vaultpath"
 )
 
 func TestClean(t *testing.T) {
@@ -29,7 +29,7 @@ func TestClean(t *testing.T) {
 		{"parent in middle resolving out", "a/../../b", "", true},
 		{"NUL byte", "no\x00pe.md", "", true},
 		{"only slashes", "///", "", true},
-		{"reserved dir tsnotes", ".tsnotes/tmp/x", "", true},
+		{"reserved dir folio", ".folio/tmp/x", "", true},
 		{"newline", "a\nb.md", "", true},
 	}
 
@@ -184,7 +184,7 @@ func TestIsHidden(t *testing.T) {
 	tests := map[string]bool{
 		".obsidian/app.json": true,
 		".git/config":        true,
-		".tsnotes/tmp/x":     true,
+		".folio/tmp/x":       true,
 		"a/.hidden/b.md":     true,
 		"Daily/x.md":         false,
 		"a.md":               false,

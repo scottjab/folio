@@ -42,7 +42,7 @@ describe("styles that have to beat CodeMirror's base theme", () => {
     // they cannot be scoped that way and double their class instead.
     const offenders = selectors().filter((sel) => {
       if (!sel.includes(".cm-")) return false;
-      if (sel.startsWith(".cm-tsn-")) return false;
+      if (sel.startsWith(".cm-fol-")) return false;
       if (sel.includes(".cm-editor")) return false;
       if (sel.includes(".cm-tooltip.cm-tooltip")) return false;
       return true;

@@ -20,7 +20,7 @@ function mount(doc = "", handlers: Partial<LivePreviewHandlers> = {}) {
     parent,
     onChange: () => {},
     onSaveRequest: () => {},
-    completeNotes: () => [{ path: "Projects/tsnotes.md", title: "tsnotes" }],
+    completeNotes: () => [{ path: "Projects/folio.md", title: "folio" }],
     completeTags: () => ["go", "daily"],
     openLink: () => {},
     openTag: () => {},
@@ -133,33 +133,33 @@ describe("live preview rendering", () => {
   });
 
   it("renders a wikilink as its label", () => {
-    const { parent } = mount("intro\n\nSee [[Projects/tsnotes|the project]].\n");
-    const link = parent.querySelector(".cm-tsn-wikilink");
+    const { parent } = mount("intro\n\nSee [[Projects/folio|the project]].\n");
+    const link = parent.querySelector(".cm-fol-wikilink");
     expect(link).not.toBeNull();
     expect(link?.textContent).toBe("the project");
   });
 
   it("marks an unresolved wikilink differently", () => {
     const { parent } = mount("intro\n\nSee [[Nope]].\n", { isResolved: () => false });
-    expect(parent.querySelector(".cm-tsn-wikilink.cm-tsn-unresolved")).not.toBeNull();
+    expect(parent.querySelector(".cm-fol-wikilink.cm-fol-unresolved")).not.toBeNull();
   });
 
   it("renders a tag as a pill", () => {
     const { parent } = mount("intro\n\nTagged #go127 here.\n");
-    const tag = parent.querySelector(".cm-tsn-tag");
+    const tag = parent.querySelector(".cm-fol-tag");
     expect(tag?.textContent).toBe("#go127");
   });
 
   it("renders a task as a real checkbox", () => {
     const { parent } = mount("intro\n\n- [x] done\n");
-    const box = parent.querySelector<HTMLInputElement>("input.cm-tsn-task");
+    const box = parent.querySelector<HTMLInputElement>("input.cm-fol-task");
     expect(box).not.toBeNull();
     expect(box?.checked).toBe(true);
   });
 
   it("ticking a checkbox rewrites only that character", () => {
     const { editor, parent } = mount("intro\n\n- [ ] a task\n");
-    const box = parent.querySelector<HTMLInputElement>("input.cm-tsn-task")!;
+    const box = parent.querySelector<HTMLInputElement>("input.cm-fol-task")!;
     box.checked = true;
     box.dispatchEvent(new Event("change"));
     expect(editor.content()).toBe("intro\n\n- [x] a task\n");
@@ -172,34 +172,34 @@ describe("live preview rendering", () => {
 
   it("does not render a wikilink inside code", () => {
     const { parent } = mount("intro\n\n```\n[[not a link]]\n```\n");
-    expect(parent.querySelector(".cm-tsn-wikilink")).toBeNull();
+    expect(parent.querySelector(".cm-fol-wikilink")).toBeNull();
   });
 
   it("stops rendering entirely in source mode", () => {
     const { editor, parent } = mount("intro\n\nSee [[Target]] and #tag.\n");
-    expect(parent.querySelector(".cm-tsn-wikilink")).not.toBeNull();
+    expect(parent.querySelector(".cm-fol-wikilink")).not.toBeNull();
 
     editor.setMode("source");
-    expect(parent.querySelector(".cm-tsn-wikilink")).toBeNull();
-    expect(parent.querySelector(".cm-tsn-tag")).toBeNull();
+    expect(parent.querySelector(".cm-fol-wikilink")).toBeNull();
+    expect(parent.querySelector(".cm-fol-tag")).toBeNull();
     expect(rendered(parent)).toContain("[[Target]]");
   });
 
   it("clicking a wikilink reports the target", () => {
     const opened: Array<[string, string]> = [];
-    const { parent } = mount("intro\n\nSee [[Projects/tsnotes#Design]].\n", {
+    const { parent } = mount("intro\n\nSee [[Projects/folio#Design]].\n", {
       openLink: (target, anchor) => opened.push([target, anchor]),
     });
-    parent.querySelector<HTMLElement>(".cm-tsn-wikilink")!.dispatchEvent(
+    parent.querySelector<HTMLElement>(".cm-fol-wikilink")!.dispatchEvent(
       new MouseEvent("mousedown", { bubbles: true }),
     );
-    expect(opened).toEqual([["Projects/tsnotes", "Design"]]);
+    expect(opened).toEqual([["Projects/folio", "Design"]]);
   });
 
   it("clicking a tag reports it", () => {
     const opened: string[] = [];
     const { parent } = mount("intro\n\nTagged #go127.\n", { openTag: (t) => opened.push(t) });
-    parent.querySelector<HTMLElement>(".cm-tsn-tag")!.dispatchEvent(
+    parent.querySelector<HTMLElement>(".cm-fol-tag")!.dispatchEvent(
       new MouseEvent("mousedown", { bubbles: true }),
     );
     expect(opened).toEqual(["go127"]);
@@ -209,7 +209,7 @@ describe("live preview rendering", () => {
     const { parent } = mount("intro\n\n![[diagram.png]]\n", {
       resolveEmbed: (t) => `/api/vaults/me/attachments/${t}`,
     });
-    const img = parent.querySelector<HTMLImageElement>(".cm-tsn-embed img");
+    const img = parent.querySelector<HTMLImageElement>(".cm-fol-embed img");
     expect(img?.getAttribute("src")).toBe("/api/vaults/me/attachments/diagram.png");
   });
 
@@ -217,7 +217,7 @@ describe("live preview rendering", () => {
     // resolveEmbed returning null means "not an image", and the source should
     // stay visible rather than vanishing into an empty widget.
     const { parent } = mount("intro\n\n![[Some Note]]\n", { resolveEmbed: () => null });
-    expect(parent.querySelector(".cm-tsn-embed")).toBeNull();
+    expect(parent.querySelector(".cm-fol-embed")).toBeNull();
     expect(rendered(parent)).toContain("Some Note");
   });
 });

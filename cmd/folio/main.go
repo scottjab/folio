@@ -1,9 +1,9 @@
-// Command tsnotes is a self-hosted, tailnet-native markdown notes app.
+// Command folio is a self-hosted, tailnet-native markdown notes app.
 //
 // It ships as a single static binary with the web app embedded. Everything it
 // keeps lives under one state directory: a SQLite index, the tailnet node's
 // state, and one directory of markdown files per user. The markdown is the
-// source of truth; the database is a cache that `tsnotes index rebuild` can
+// source of truth; the database is a cache that `folio index rebuild` can
 // reconstruct from the files.
 package main
 
@@ -20,7 +20,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/scottjab/tsnotes/internal/config"
+	"github.com/scottjab/folio/internal/config"
 )
 
 // version is set at build time with -ldflags "-X main.version=...".
@@ -31,7 +31,7 @@ func main() {
 		if errors.Is(err, flag.ErrHelp) {
 			os.Exit(2)
 		}
-		fmt.Fprintf(os.Stderr, "tsnotes: %v\n", err)
+		fmt.Fprintf(os.Stderr, "folio: %v\n", err)
 		os.Exit(1)
 	}
 }
@@ -45,7 +45,7 @@ var commands = []struct {
 }{
 	{"serve", "run the server on the tailnet", runServe},
 	{"dev", "run locally without a tailnet, for development", runDev},
-	{"mcp", "bridge a stdio MCP client to a running tsnotes", runMCP},
+	{"mcp", "bridge a stdio MCP client to a running folio", runMCP},
 	{"index", "rebuild or check the search index", runIndex},
 	{"doctor", "report on the state directory and the index", runDoctor},
 	{"version", "print the version", runVersion},
@@ -86,11 +86,11 @@ func run(args []string) error {
 
 func usage() {
 	var b strings.Builder
-	b.WriteString("tsnotes: self-hosted markdown notes on your tailnet\n\nusage: tsnotes <command> [flags]\n\ncommands:\n")
+	b.WriteString("folio: self-hosted markdown notes on your tailnet\n\nusage: folio <command> [flags]\n\ncommands:\n")
 	for _, c := range commands {
 		fmt.Fprintf(&b, "  %-9s %s\n", c.name, c.blurb)
 	}
-	b.WriteString("\nRun 'tsnotes <command> -h' for a command's flags.\n")
+	b.WriteString("\nRun 'folio <command> -h' for a command's flags.\n")
 	fmt.Fprint(os.Stderr, b.String())
 }
 
@@ -106,7 +106,7 @@ func loadConfig(fs *flag.FlagSet, args []string, extra func(*flag.FlagSet, *conf
 	// The config file has to be found before the other flags are parsed, since
 	// it supplies their defaults. A throwaway pass does that without disturbing
 	// the real parse.
-	path := os.Getenv("TSNOTES_CONFIG")
+	path := os.Getenv("FOLIO_CONFIG")
 	pre := flag.NewFlagSet(fs.Name(), flag.ContinueOnError)
 	// Unknown flags are expected in this pass and are reported properly by the
 	// real parse below, so keep the noise off the terminal.
@@ -162,7 +162,7 @@ func newLogger(level string) *slog.Logger {
 }
 
 func runVersion(context.Context, []string) error {
-	fmt.Printf("tsnotes %s\n", version)
+	fmt.Printf("folio %s\n", version)
 	if info, ok := debug.ReadBuildInfo(); ok {
 		fmt.Printf("go       %s\n", info.GoVersion)
 		for _, s := range info.Settings {

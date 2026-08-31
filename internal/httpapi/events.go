@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/scottjab/tsnotes/internal/events"
-	"github.com/scottjab/tsnotes/internal/share"
+	"github.com/scottjab/folio/internal/events"
+	"github.com/scottjab/folio/internal/share"
 )
 
 // sseKeepalive is how often we send a comment frame on an idle stream, to keep

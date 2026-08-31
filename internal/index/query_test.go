@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/scottjab/tsnotes/internal/index"
+	"github.com/scottjab/folio/internal/index"
 )
 
 func TestParseQuery(t *testing.T) {
@@ -22,7 +22,7 @@ func TestParseQuery(t *testing.T) {
 		{"tag filter", "tag:go", `tags:"go"`, ""},
 		{"tags alias", "tags:go", `tags:"go"`, ""},
 		{"path filter", "path:Daily", `path:"Daily"`, ""},
-		{"title filter", "title:tsnotes", `title:"tsnotes"`, ""},
+		{"title filter", "title:folio", `title:"folio"`, ""},
 		{"unknown field is a literal term", "foo:bar", `"foo:bar"`, ""},
 
 		{"prefix", "foo*", `"foo"*`, ""},

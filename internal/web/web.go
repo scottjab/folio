@@ -1,4 +1,4 @@
-// Package web embeds the built browser app so tsnotes ships as one binary.
+// Package web embeds the built browser app so folio ships as one binary.
 //
 // The bundle is a build artifact, not source. dist/ therefore holds only a
 // .gitkeep in a clean checkout, which is enough for go:embed to compile, and a
@@ -74,7 +74,7 @@ func CheckBuilt() error {
 Build it one of these ways:
 
     make build          bundle the app and compile, in one step
-    nix build .#        the same, hermetically, into ./result/bin/tsnotes
+    nix build .#        the same, hermetically, into ./result/bin/folio
     go generate ./...   just the bundle, if you then want to use 'go build'
 
 The API and the MCP server work without it, so if that is genuinely what you

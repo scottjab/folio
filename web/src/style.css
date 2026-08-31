@@ -1,4 +1,4 @@
-/* tsnotes styling.
+/* folio styling.
  *
  * Light and dark both come from one set of tokens, switched by
  * prefers-color-scheme. No framework, no CDN: the page is served with a strict
@@ -526,31 +526,31 @@ button {
 
 /* Live preview: block-level rendering */
 
-.cm-tsn-h1, .cm-tsn-h2, .cm-tsn-h3, .cm-tsn-h4, .cm-tsn-h5, .cm-tsn-h6 {
+.cm-fol-h1, .cm-fol-h2, .cm-fol-h3, .cm-fol-h4, .cm-fol-h5, .cm-fol-h6 {
   font-family: var(--font-ui);
   font-weight: 650;
   line-height: 1.3;
 }
-.cm-tsn-h1 { font-size: 1.9em; margin-top: 0.4em; }
-.cm-tsn-h2 { font-size: 1.5em; margin-top: 0.4em; }
-.cm-tsn-h3 { font-size: 1.25em; }
-.cm-tsn-h4 { font-size: 1.1em; }
-.cm-tsn-h5, .cm-tsn-h6 { font-size: 1em; color: var(--text-muted); }
+.cm-fol-h1 { font-size: 1.9em; margin-top: 0.4em; }
+.cm-fol-h2 { font-size: 1.5em; margin-top: 0.4em; }
+.cm-fol-h3 { font-size: 1.25em; }
+.cm-fol-h4 { font-size: 1.1em; }
+.cm-fol-h5, .cm-fol-h6 { font-size: 1em; color: var(--text-muted); }
 
-.cm-tsn-quote {
+.cm-fol-quote {
   padding-left: 0.9rem;
   border-left: 3px solid var(--border);
   color: var(--text-muted);
   font-style: italic;
 }
 
-.cm-tsn-fence {
+.cm-fol-fence {
   font-family: var(--font-mono);
   font-size: 0.88em;
   background: var(--bg-sunken);
 }
 
-.cm-tsn-rule {
+.cm-fol-rule {
   display: inline-block;
   width: 100%;
   margin: 0.6em 0;
@@ -561,32 +561,32 @@ button {
 
 /* Live preview: inline rendering */
 
-.cm-tsn-strong { font-weight: 700; }
-.cm-tsn-em { font-style: italic; }
-.cm-tsn-strike { text-decoration: line-through; opacity: 0.7; }
-.cm-tsn-code {
+.cm-fol-strong { font-weight: 700; }
+.cm-fol-em { font-style: italic; }
+.cm-fol-strike { text-decoration: line-through; opacity: 0.7; }
+.cm-fol-code {
   padding: 0.1em 0.32em;
   font-family: var(--font-mono);
   font-size: 0.88em;
   background: var(--bg-sunken);
   border-radius: 4px;
 }
-.cm-tsn-link { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+.cm-fol-link { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
 
-.cm-tsn-wikilink {
+.cm-fol-wikilink {
   color: var(--accent);
   text-decoration: none;
   border-bottom: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
   cursor: pointer;
 }
-.cm-tsn-wikilink:hover { border-bottom-color: var(--accent); }
-.cm-tsn-unresolved {
+.cm-fol-wikilink:hover { border-bottom-color: var(--accent); }
+.cm-fol-unresolved {
   color: var(--error);
   border-bottom-style: dashed;
   border-bottom-color: color-mix(in srgb, var(--error) 45%, transparent);
 }
 
-.cm-tsn-tag {
+.cm-fol-tag {
   padding: 0.05em 0.45em;
   font-family: var(--font-ui);
   font-size: 0.82em;
@@ -596,13 +596,13 @@ button {
   cursor: pointer;
   white-space: nowrap;
 }
-.cm-tsn-tag:hover { filter: brightness(1.08); }
+.cm-fol-tag:hover { filter: brightness(1.08); }
 
-.cm-tsn-bullet { display: inline-block; width: 1ch; color: var(--text-muted); }
-.cm-tsn-task { margin-right: 0.35rem; vertical-align: middle; accent-color: var(--accent); }
+.cm-fol-bullet { display: inline-block; width: 1ch; color: var(--text-muted); }
+.cm-fol-task { margin-right: 0.35rem; vertical-align: middle; accent-color: var(--accent); }
 
-.cm-tsn-embed { display: block; margin: 0.5em 0; }
-.cm-tsn-embed img {
+.cm-fol-embed { display: block; margin: 0.5em 0; }
+.cm-fol-embed img {
   max-width: 100%;
   max-height: 60vh;
   border-radius: var(--radius);
@@ -611,21 +611,21 @@ button {
 
 /* Source mode: token colours, which also apply inside fenced code blocks */
 
-.cm-tsn-tok-h1, .cm-tsn-tok-h2, .cm-tsn-tok-h3, .cm-tsn-tok-h4 { font-weight: 650; }
-.cm-tsn-tok-strong { font-weight: 700; }
-.cm-tsn-tok-em { font-style: italic; }
-.cm-tsn-tok-strike { text-decoration: line-through; }
-.cm-tsn-tok-code { font-family: var(--font-mono); font-size: 0.9em; }
-.cm-tsn-tok-link, .cm-tsn-tok-wikilink { color: var(--accent); }
-.cm-tsn-tok-url { color: var(--text-muted); text-decoration: underline; }
-.cm-tsn-tok-quote { color: var(--text-muted); font-style: italic; }
-.cm-tsn-tok-list { color: var(--text-muted); }
-.cm-tsn-tok-mark { color: var(--text-muted); opacity: 0.55; }
-.cm-tsn-tok-tag { color: var(--tag-fg); }
-.cm-tsn-tok-comment { color: var(--text-muted); font-style: italic; }
-.cm-tsn-tok-keyword { color: var(--tag-fg); }
-.cm-tsn-tok-string { color: var(--warn); }
-.cm-tsn-tok-number { color: var(--accent); }
+.cm-fol-tok-h1, .cm-fol-tok-h2, .cm-fol-tok-h3, .cm-fol-tok-h4 { font-weight: 650; }
+.cm-fol-tok-strong { font-weight: 700; }
+.cm-fol-tok-em { font-style: italic; }
+.cm-fol-tok-strike { text-decoration: line-through; }
+.cm-fol-tok-code { font-family: var(--font-mono); font-size: 0.9em; }
+.cm-fol-tok-link, .cm-fol-tok-wikilink { color: var(--accent); }
+.cm-fol-tok-url { color: var(--text-muted); text-decoration: underline; }
+.cm-fol-tok-quote { color: var(--text-muted); font-style: italic; }
+.cm-fol-tok-list { color: var(--text-muted); }
+.cm-fol-tok-mark { color: var(--text-muted); opacity: 0.55; }
+.cm-fol-tok-tag { color: var(--tag-fg); }
+.cm-fol-tok-comment { color: var(--text-muted); font-style: italic; }
+.cm-fol-tok-keyword { color: var(--tag-fg); }
+.cm-fol-tok-string { color: var(--warn); }
+.cm-fol-tok-number { color: var(--accent); }
 
 /* --- narrow screens --- */
 

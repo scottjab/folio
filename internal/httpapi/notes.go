@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/scottjab/tsnotes/internal/notes"
-	"github.com/scottjab/tsnotes/internal/share"
-	"github.com/scottjab/tsnotes/internal/vaultpath"
+	"github.com/scottjab/folio/internal/notes"
+	"github.com/scottjab/folio/internal/share"
+	"github.com/scottjab/folio/internal/vaultpath"
 )
 
 // scope resolves the {vault} path segment for the authenticated caller.

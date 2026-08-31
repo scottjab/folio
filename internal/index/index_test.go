@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/scottjab/tsnotes/internal/index"
-	"github.com/scottjab/tsnotes/internal/store"
-	"github.com/scottjab/tsnotes/internal/vault"
+	"github.com/scottjab/folio/internal/index"
+	"github.com/scottjab/folio/internal/store"
+	"github.com/scottjab/folio/internal/vault"
 )
 
 type fixture struct {
@@ -106,13 +106,13 @@ func TestGetMissing(t *testing.T) {
 
 func TestSearchFindsTitleBodyAndTags(t *testing.T) {
 	f := newFixture(t)
-	f.write(t, "Projects/tsnotes.md", "---\ntags: [go, sqlite]\n---\n# tsnotes\n\nA notes app on the tailnet.\n")
+	f.write(t, "Projects/folio.md", "---\ntags: [go, sqlite]\n---\n# folio\n\nA notes app on the tailnet.\n")
 	f.write(t, "Daily/2026-08-30.md", "---\ntags: [daily]\n---\n# Thursday\n\nUnrelated content here.\n")
 
 	for _, tc := range []struct{ query, want string }{
-		{"tsnotes", "Projects/tsnotes.md"},    // title
-		{"tailnet", "Projects/tsnotes.md"},    // body
-		{"tag:sqlite", "Projects/tsnotes.md"}, // tag
+		{"folio", "Projects/folio.md"},      // title
+		{"tailnet", "Projects/folio.md"},    // body
+		{"tag:sqlite", "Projects/folio.md"}, // tag
 		{"Thursday", "Daily/2026-08-30.md"},
 		{"path:Daily", "Daily/2026-08-30.md"},
 	} {
@@ -289,11 +289,11 @@ func TestRemoveClearsEverything(t *testing.T) {
 
 func TestBacklinks(t *testing.T) {
 	f := newFixture(t)
-	f.write(t, "Projects/tsnotes.md", "# tsnotes\n\nThe project.\n")
-	f.write(t, "Daily/2026-08-30.md", "# Thursday\n\nWorked on [[Projects/tsnotes]] today.\n")
+	f.write(t, "Projects/folio.md", "# folio\n\nThe project.\n")
+	f.write(t, "Daily/2026-08-30.md", "# Thursday\n\nWorked on [[Projects/folio]] today.\n")
 	f.write(t, "Daily/2026-08-29.md", "# Wednesday\n\nNothing related.\n")
 
-	links, err := f.ix.Backlinks(f.ctx, f.vaultID, "Projects/tsnotes.md")
+	links, err := f.ix.Backlinks(f.ctx, f.vaultID, "Projects/folio.md")
 	if err != nil {
 		t.Fatalf("Backlinks: %v", err)
 	}
@@ -335,10 +335,10 @@ func TestDanglingLinkResolvesWhenTargetAppears(t *testing.T) {
 
 func TestRenameRewritesInboundWikilinks(t *testing.T) {
 	f := newFixture(t)
-	f.write(t, "Projects/tsnotes.md", "# tsnotes\n")
-	f.write(t, "Daily/x.md", "# X\n\nSee [[Projects/tsnotes]] and [[Projects/tsnotes|the project]].\n")
+	f.write(t, "Projects/folio.md", "# folio\n")
+	f.write(t, "Daily/x.md", "# X\n\nSee [[Projects/folio]] and [[Projects/folio|the project]].\n")
 
-	if err := f.ix.Rename(f.ctx, f.vaultID, f.v, "Projects/tsnotes.md", "Archive/tsnotes.md"); err != nil {
+	if err := f.ix.Rename(f.ctx, f.vaultID, f.v, "Projects/folio.md", "Archive/folio.md"); err != nil {
 		t.Fatalf("Rename: %v", err)
 	}
 
@@ -347,18 +347,18 @@ func TestRenameRewritesInboundWikilinks(t *testing.T) {
 		t.Fatalf("Read: %v", err)
 	}
 	got := string(body)
-	if strings.Contains(got, "[[Projects/tsnotes]]") {
+	if strings.Contains(got, "[[Projects/folio]]") {
 		t.Errorf("plain wikilink was not rewritten: %q", got)
 	}
-	if !strings.Contains(got, "[[Archive/tsnotes]]") {
+	if !strings.Contains(got, "[[Archive/folio]]") {
 		t.Errorf("expected the rewritten target: %q", got)
 	}
 	// The alias the author chose must survive the rewrite.
-	if !strings.Contains(got, "[[Archive/tsnotes|the project]]") {
+	if !strings.Contains(got, "[[Archive/folio|the project]]") {
 		t.Errorf("alias was lost: %q", got)
 	}
 
-	links, _ := f.ix.Backlinks(f.ctx, f.vaultID, "Archive/tsnotes.md")
+	links, _ := f.ix.Backlinks(f.ctx, f.vaultID, "Archive/folio.md")
 	if len(links) != 2 {
 		t.Errorf("got %d backlinks after rename, want 2", len(links))
 	}
@@ -518,15 +518,15 @@ func TestSyncIsIdempotentAndSkipsUnchanged(t *testing.T) {
 
 func TestRebuildRecreatesTheIndexFromFilesAlone(t *testing.T) {
 	f := newFixture(t)
-	f.write(t, "Projects/tsnotes.md", "---\ntags: [go]\n---\n# tsnotes\n\ntailnet notes\n")
-	f.write(t, "Daily/x.md", "# X\n\nSee [[Projects/tsnotes]].\n")
+	f.write(t, "Projects/folio.md", "---\ntags: [go]\n---\n# folio\n\ntailnet notes\n")
+	f.write(t, "Daily/x.md", "# X\n\nSee [[Projects/folio]].\n")
 
 	// A share is authoritative data with no markdown home. Rebuild must not
 	// touch it; that is the whole reason `index rebuild` exists rather than
 	// telling people to delete the database.
 	if _, err := f.db.Exec(f.ctx,
 		`INSERT INTO shares(id, vault_id, owner_user_id, path, is_folder, grantee_login, perm, created_at)
-		 VALUES ('s1', 1, 1, 'Projects/tsnotes.md', 0, 'bob@github', 'read', 0)`); err != nil {
+		 VALUES ('s1', 1, 1, 'Projects/folio.md', 0, 'bob@github', 'read', 0)`); err != nil {
 		t.Fatalf("seed share: %v", err)
 	}
 
@@ -538,10 +538,10 @@ func TestRebuildRecreatesTheIndexFromFilesAlone(t *testing.T) {
 		t.Errorf("stats = %+v, want 2 notes indexed", stats)
 	}
 
-	if got := f.searchPaths(t, "tailnet"); !slices.Equal(got, []string{"Projects/tsnotes.md"}) {
+	if got := f.searchPaths(t, "tailnet"); !slices.Equal(got, []string{"Projects/folio.md"}) {
 		t.Errorf("search after rebuild = %v", got)
 	}
-	links, _ := f.ix.Backlinks(f.ctx, f.vaultID, "Projects/tsnotes.md")
+	links, _ := f.ix.Backlinks(f.ctx, f.vaultID, "Projects/folio.md")
 	if len(links) != 1 {
 		t.Errorf("backlinks after rebuild = %+v, want 1", links)
 	}
@@ -600,7 +600,7 @@ func TestStats(t *testing.T) {
 }
 
 func TestSyncPathsSkipsUnchangedFiles(t *testing.T) {
-	// This is the loop-breaker: tsnotes writes a note, fsnotify reports it, and
+	// This is the loop-breaker: folio writes a note, fsnotify reports it, and
 	// the resulting sync must be a no-op rather than a pointless reindex.
 	f := newFixture(t)
 	f.write(t, "a.md", "# A\n")

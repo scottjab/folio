@@ -12,13 +12,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/scottjab/tsnotes/internal/events"
-	"github.com/scottjab/tsnotes/internal/httpapi"
-	"github.com/scottjab/tsnotes/internal/identity"
-	"github.com/scottjab/tsnotes/internal/index"
-	"github.com/scottjab/tsnotes/internal/share"
-	"github.com/scottjab/tsnotes/internal/store"
-	"github.com/scottjab/tsnotes/internal/vault"
+	"github.com/scottjab/folio/internal/events"
+	"github.com/scottjab/folio/internal/httpapi"
+	"github.com/scottjab/folio/internal/identity"
+	"github.com/scottjab/folio/internal/index"
+	"github.com/scottjab/folio/internal/share"
+	"github.com/scottjab/folio/internal/store"
+	"github.com/scottjab/folio/internal/vault"
 )
 
 // harness wires up a real API over a temporary state directory, with a fake
@@ -358,7 +358,7 @@ func TestPathTraversalIsRejected(t *testing.T) {
 	h := newHarness(t)
 	alice := h.as("100.64.0.1", aliceWho)
 
-	for _, p := range []string{"../escape.md", "a/../../b.md", ".tsnotes/tmp/x.md"} {
+	for _, p := range []string{"../escape.md", "a/../../b.md", ".folio/tmp/x.md"} {
 		resp := alice.do("POST", "/api/vaults/me/notes", map[string]any{"path": p, "content": "x"})
 		if resp.StatusCode != http.StatusBadRequest {
 			t.Errorf("POST with path %q = %d, want 400", p, resp.StatusCode)
@@ -386,11 +386,11 @@ func TestMoveRewritesLinks(t *testing.T) {
 	h := newHarness(t)
 	alice := h.as("100.64.0.1", aliceWho)
 
-	alice.do("POST", "/api/vaults/me/notes", map[string]any{"path": "Projects/tsnotes.md", "content": "# tsnotes\n"}).Body.Close()
-	alice.do("POST", "/api/vaults/me/notes", map[string]any{"path": "Daily/x.md", "content": "See [[Projects/tsnotes]].\n"}).Body.Close()
+	alice.do("POST", "/api/vaults/me/notes", map[string]any{"path": "Projects/folio.md", "content": "# folio\n"}).Body.Close()
+	alice.do("POST", "/api/vaults/me/notes", map[string]any{"path": "Daily/x.md", "content": "See [[Projects/folio]].\n"}).Body.Close()
 
 	resp := alice.do("POST", "/api/vaults/me/move", map[string]any{
-		"from": "Projects/tsnotes.md", "to": "Archive/tsnotes.md",
+		"from": "Projects/folio.md", "to": "Archive/folio.md",
 	})
 	wantStatus(t, resp, 200)
 	resp.Body.Close()
@@ -400,7 +400,7 @@ func TestMoveRewritesLinks(t *testing.T) {
 	}
 	resp = alice.getJSON("/api/vaults/me/notes/Daily/x.md", &got)
 	wantStatus(t, resp, 200)
-	if !strings.Contains(got.Content, "[[Archive/tsnotes]]") {
+	if !strings.Contains(got.Content, "[[Archive/folio]]") {
 		t.Errorf("inbound link not rewritten: %q", got.Content)
 	}
 }

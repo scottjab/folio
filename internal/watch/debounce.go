@@ -1,4 +1,4 @@
-// Package watch keeps the index in step with files that change outside tsnotes:
+// Package watch keeps the index in step with files that change outside folio:
 // Obsidian on the desktop, a git pull, an rsync, a text editor.
 //
 // It is split in two on purpose. Debouncer holds all the timing logic and no I/O,

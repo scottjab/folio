@@ -33,7 +33,7 @@ import (
 //go:embed migrations/*.sql
 var migrationFS embed.FS
 
-// DB is a handle on the tsnotes database.
+// DB is a handle on the folio database.
 type DB struct {
 	sql *sql.DB
 }

@@ -6,7 +6,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/scottjab/tsnotes/internal/vault"
+	"github.com/scottjab/folio/internal/vault"
 )
 
 func TestSetOpensAndCaches(t *testing.T) {

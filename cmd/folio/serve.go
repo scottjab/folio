@@ -10,23 +10,23 @@ import (
 	"strings"
 	"time"
 
-	"github.com/scottjab/tsnotes/internal/config"
-	"github.com/scottjab/tsnotes/internal/httpapi"
-	"github.com/scottjab/tsnotes/internal/mcpsrv"
-	"github.com/scottjab/tsnotes/internal/tsserve"
-	"github.com/scottjab/tsnotes/internal/web"
+	"github.com/scottjab/folio/internal/config"
+	"github.com/scottjab/folio/internal/httpapi"
+	"github.com/scottjab/folio/internal/mcpsrv"
+	"github.com/scottjab/folio/internal/tsserve"
+	"github.com/scottjab/folio/internal/web"
 )
 
 const shutdownGrace = 15 * time.Second
 
 func runServe(ctx context.Context, args []string) error {
-	fs := flag.NewFlagSet("tsnotes serve", flag.ContinueOnError)
+	fs := flag.NewFlagSet("folio serve", flag.ContinueOnError)
 	var verbose, allowStubUI bool
 	cfg, err := loadConfig(fs, args, func(fs *flag.FlagSet, c *config.Config) {
 		fs.BoolVar(&allowStubUI, "allow-stub-ui", false, "start even though no web app bundle was built in")
 		fs.StringVar(&c.Hostname, "hostname", c.Hostname, "tailnet node name")
 		fs.StringVar(&c.Addr, "addr", c.Addr, "listen address inside the tailnet")
-		fs.BoolVar(&c.WatchExternal, "watch", c.WatchExternal, "notice edits made outside tsnotes, such as in Obsidian")
+		fs.BoolVar(&c.WatchExternal, "watch", c.WatchExternal, "notice edits made outside folio, such as in Obsidian")
 		fs.BoolVar(&verbose, "verbose-tsnet", false, "pass tsnet's own logs through at info level")
 	})
 	if err != nil {
@@ -101,7 +101,7 @@ func runServe(ctx context.Context, args []string) error {
 	go serveRedirect(ctx, ts, cfg, log)
 
 	url := ts.URL(ctx)
-	log.Info("tsnotes is up", "url", url, "mcp", url+"/mcp", "state", cfg.StateDir)
+	log.Info("folio is up", "url", url, "mcp", url+"/mcp", "state", cfg.StateDir)
 
 	errc := make(chan error, 1)
 	go func() {

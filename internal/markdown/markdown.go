@@ -23,7 +23,7 @@ import (
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/text"
 
-	"github.com/scottjab/tsnotes/internal/vaultpath"
+	"github.com/scottjab/folio/internal/vaultpath"
 )
 
 // LinkKind distinguishes the three ways a note can point at something.
@@ -165,7 +165,7 @@ func Parse(notePath string, src []byte) (*Doc, error) {
 }
 
 // parseFrontmatter decodes the YAML block, pulling out the keys we act on and
-// keeping every other key in Extra so a round-trip through tsnotes never eats
+// keeping every other key in Extra so a round-trip through folio never eats
 // a plugin's state.
 func parseFrontmatter(raw []byte) (Frontmatter, error) {
 	var m map[string]any
@@ -635,7 +635,7 @@ func boolRank(b bool) int {
 // so it names newPath instead, preserving the "!" embed marker, the #anchor, and
 // the |alias exactly as the author wrote them.
 //
-// It deliberately leaves basename-only links such as [[tsnotes]] alone. Those
+// It deliberately leaves basename-only links such as [[folio]] alone. Those
 // resolve by searching the vault, so they keep working after a move on their
 // own, and rewriting them would churn files for no reason.
 //

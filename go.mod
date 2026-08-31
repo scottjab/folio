@@ -1,4 +1,4 @@
-module github.com/scottjab/tsnotes
+module github.com/scottjab/folio
 
 go 1.27
 

@@ -20,9 +20,9 @@ import (
 	"time"
 	"uuid"
 
-	"github.com/scottjab/tsnotes/internal/identity"
-	"github.com/scottjab/tsnotes/internal/store"
-	"github.com/scottjab/tsnotes/internal/vaultpath"
+	"github.com/scottjab/folio/internal/identity"
+	"github.com/scottjab/folio/internal/store"
+	"github.com/scottjab/folio/internal/vaultpath"
 )
 
 // Perm is the level of access a grant confers.
@@ -159,11 +159,11 @@ func (r *Resolver) Grant(ctx context.Context, owner identity.User, path string, 
 		return Share{}, errors.New("you already have access to your own notes")
 	}
 
-	// Sharing with a login tsnotes has never seen is almost always a typo, and
+	// Sharing with a login folio has never seen is almost always a typo, and
 	// accepting it would leave you thinking the note was shared when it was not.
 	if _, err := r.db.One[int64](ctx, `SELECT id FROM users WHERE login = ? COLLATE NOCASE`, granteeLogin); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return Share{}, fmt.Errorf("%w: %s has not used tsnotes yet, so there is nothing to share with",
+			return Share{}, fmt.Errorf("%w: %s has not used folio yet, so there is nothing to share with",
 				identity.ErrUnknownUser, granteeLogin)
 		}
 		return Share{}, fmt.Errorf("look up %q: %w", granteeLogin, err)

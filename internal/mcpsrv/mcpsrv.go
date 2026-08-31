@@ -8,7 +8,7 @@
 //
 // Two transports are offered. Streamable HTTP is mounted at /mcp on the tsnet
 // listener, which is what a modern MCP client connects to directly. For clients
-// that only speak stdio, `tsnotes mcp` bridges the two; see bridge.go.
+// that only speak stdio, `folio mcp` bridges the two; see bridge.go.
 package mcpsrv
 
 import (
@@ -21,11 +21,11 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/scottjab/tsnotes/internal/events"
-	"github.com/scottjab/tsnotes/internal/identity"
-	"github.com/scottjab/tsnotes/internal/index"
-	"github.com/scottjab/tsnotes/internal/notes"
-	"github.com/scottjab/tsnotes/internal/share"
+	"github.com/scottjab/folio/internal/events"
+	"github.com/scottjab/folio/internal/identity"
+	"github.com/scottjab/folio/internal/index"
+	"github.com/scottjab/folio/internal/notes"
+	"github.com/scottjab/folio/internal/share"
 )
 
 // Version is reported to clients during initialize.
@@ -68,8 +68,8 @@ type session struct {
 // somewhere mutable and get the wrong one.
 func (s *Server) ForUser(u identity.User) *mcp.Server {
 	srv := mcp.NewServer(&mcp.Implementation{
-		Name:    "tsnotes",
-		Title:   "tsnotes",
+		Name:    "folio",
+		Title:   "folio",
 		Version: Version,
 	}, &mcp.ServerOptions{
 		Instructions: instructions,
@@ -84,12 +84,12 @@ func (s *Server) ForUser(u identity.User) *mcp.Server {
 
 // instructions tell the model how this vault is organised, which saves it
 // guessing at conventions and asking the user.
-const instructions = `tsnotes is a markdown notes vault on a Tailscale tailnet.
+const instructions = `folio is a markdown notes vault on a Tailscale tailnet.
 
 Notes are plain markdown files with YAML frontmatter. They link to each other
 with Obsidian-style wikilinks, [[Folder/Note]], and carry #tags inline or in
 frontmatter. Paths are vault-relative and use forward slashes, for example
-"Daily/2026-08-30.md" or "Projects/tsnotes.md".
+"Daily/2026-08-30.md" or "Projects/folio.md".
 
 Start with search_notes to find things; it does full-text search with
 BM25 ranking and supports tag:, path:, and title: filters, "quoted phrases",

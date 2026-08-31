@@ -13,8 +13,8 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 
-	"github.com/scottjab/tsnotes/internal/vault"
-	"github.com/scottjab/tsnotes/internal/vaultpath"
+	"github.com/scottjab/folio/internal/vault"
+	"github.com/scottjab/folio/internal/vaultpath"
 )
 
 // Default timings. 300ms is long enough to absorb an editor's write-chmod-rename
@@ -25,7 +25,7 @@ const (
 	DefaultMaxDelay = 3 * time.Second
 )
 
-// Watcher reports changes made to a vault from outside tsnotes.
+// Watcher reports changes made to a vault from outside folio.
 //
 // fsnotify on Linux watches a single directory, not a tree, so the watcher keeps
 // its own set of directory watches and adds new ones as directories appear.

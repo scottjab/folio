@@ -1,7 +1,7 @@
 // Package notes is the operations layer: what it means to read, create, edit,
 // move, or search a note, independent of how the request arrived.
 //
-// It exists because tsnotes has two front ends. The web API and the MCP server
+// It exists because folio has two front ends. The web API and the MCP server
 // must agree exactly on permissions, conflict handling, link rewriting, and
 // which events get published, and the only reliable way to guarantee that is to
 // have one implementation. A handler's job is to translate HTTP or MCP into a
@@ -16,14 +16,14 @@ import (
 	"time"
 	"uuid"
 
-	"github.com/scottjab/tsnotes/internal/events"
-	"github.com/scottjab/tsnotes/internal/identity"
-	"github.com/scottjab/tsnotes/internal/index"
-	"github.com/scottjab/tsnotes/internal/markdown"
-	"github.com/scottjab/tsnotes/internal/share"
-	"github.com/scottjab/tsnotes/internal/store"
-	"github.com/scottjab/tsnotes/internal/vault"
-	"github.com/scottjab/tsnotes/internal/vaultpath"
+	"github.com/scottjab/folio/internal/events"
+	"github.com/scottjab/folio/internal/identity"
+	"github.com/scottjab/folio/internal/index"
+	"github.com/scottjab/folio/internal/markdown"
+	"github.com/scottjab/folio/internal/share"
+	"github.com/scottjab/folio/internal/store"
+	"github.com/scottjab/folio/internal/vault"
+	"github.com/scottjab/folio/internal/vaultpath"
 )
 
 // ErrNoMatch means an edit's search text was not found.

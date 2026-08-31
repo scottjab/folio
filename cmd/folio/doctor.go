@@ -8,13 +8,13 @@ import (
 	"path/filepath"
 	"text/tabwriter"
 
-	"github.com/scottjab/tsnotes/internal/web"
+	"github.com/scottjab/folio/internal/web"
 )
 
-// runDoctor prints what tsnotes can see, so a problem can be diagnosed without
+// runDoctor prints what folio can see, so a problem can be diagnosed without
 // reading the database by hand.
 func runDoctor(ctx context.Context, args []string) error {
-	fs := flag.NewFlagSet("tsnotes doctor", flag.ContinueOnError)
+	fs := flag.NewFlagSet("folio doctor", flag.ContinueOnError)
 	cfg, err := loadConfig(fs, args, nil)
 	if err != nil {
 		return err
@@ -27,7 +27,7 @@ func runDoctor(ctx context.Context, args []string) error {
 	}
 	defer a.Close()
 
-	fmt.Printf("tsnotes %s\n\n", version)
+	fmt.Printf("folio %s\n\n", version)
 	fmt.Printf("state dir   %s\n", cfg.StateDir)
 	fmt.Printf("database    %s\n", cfg.DatabasePath())
 	fmt.Printf("vaults dir  %s\n", cfg.VaultsDir())
@@ -57,7 +57,7 @@ func runDoctor(ctx context.Context, args []string) error {
 		return err
 	}
 	if len(rows) == 0 {
-		fmt.Println("No vaults yet. One is created the first time someone opens tsnotes.")
+		fmt.Println("No vaults yet. One is created the first time someone opens folio.")
 		return nil
 	}
 
@@ -94,8 +94,8 @@ func runDoctor(ctx context.Context, args []string) error {
 	w.Flush()
 
 	if drifted {
-		fmt.Println("\nThe index and the files disagree. Run `tsnotes index sync` to reconcile,")
-		fmt.Println("or `tsnotes index rebuild` to reconstruct the index from the files entirely.")
+		fmt.Println("\nThe index and the files disagree. Run `folio index sync` to reconcile,")
+		fmt.Println("or `folio index rebuild` to reconstruct the index from the files entirely.")
 		fmt.Println("Neither touches users, vaults, or shares.")
 	} else {
 		fmt.Println("\nThe index matches what is on disk.")

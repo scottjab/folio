@@ -25,11 +25,11 @@ const note = {
   tags: ["daily"],
   sha256: "abc123",
   updatedAt: "2026-08-31T00:00:00Z",
-  content: "---\ntags: [daily]\n---\n# Monday\n\nSee [[Projects/tsnotes]] and #go127.\n",
+  content: "---\ntags: [daily]\n---\n# Monday\n\nSee [[Projects/folio]] and #go127.\n",
   size: 70,
   modTime: "2026-08-31T00:00:00Z",
   perm: "write" as const,
-  backlinks: [{ path: "Projects/tsnotes.md", title: "tsnotes", kind: "wiki" }],
+  backlinks: [{ path: "Projects/folio.md", title: "folio", kind: "wiki" }],
 };
 
 /** Routes a request path to a canned response. */
@@ -113,7 +113,7 @@ describe("App", () => {
     expect(root.querySelector(".sidebar")).not.toBeNull();
     expect(root.querySelector(".main")).not.toBeNull();
     expect(root.querySelector(".cm-editor")).not.toBeNull();
-    expect(root.textContent).toContain("tsnotes");
+    expect(root.textContent).toContain("folio");
   });
 
   it("shows who you are", async () => {
@@ -133,13 +133,13 @@ describe("App", () => {
     const content = document.querySelector(".cm-content")!.textContent ?? "";
     expect(content).toContain("Monday");
     // The wikilink renders as a widget rather than raw brackets.
-    expect(document.querySelector(".cm-tsn-wikilink")).not.toBeNull();
-    expect(document.querySelector(".cm-tsn-tag")).not.toBeNull();
+    expect(document.querySelector(".cm-fol-wikilink")).not.toBeNull();
+    expect(document.querySelector(".cm-fol-tag")).not.toBeNull();
   });
 
   it("shows backlinks", async () => {
     await startApp();
-    expect(document.querySelector(".backlinks")?.textContent).toContain("tsnotes");
+    expect(document.querySelector(".backlinks")?.textContent).toContain("folio");
   });
 
   it("subscribes to the event stream", async () => {
@@ -151,12 +151,12 @@ describe("App", () => {
     await startApp();
     const toggle = document.querySelector<HTMLButtonElement>(".mode-toggle")!;
     expect(toggle.textContent).toBe("Markdown");
-    expect(document.querySelector(".cm-tsn-wikilink")).not.toBeNull();
+    expect(document.querySelector(".cm-fol-wikilink")).not.toBeNull();
 
     toggle.click();
     expect(toggle.textContent).toBe("Preview");
-    expect(document.querySelector(".cm-tsn-wikilink")).toBeNull();
-    expect(document.querySelector(".cm-content")?.textContent).toContain("[[Projects/tsnotes]]");
+    expect(document.querySelector(".cm-fol-wikilink")).toBeNull();
+    expect(document.querySelector(".cm-content")?.textContent).toContain("[[Projects/folio]]");
   });
 
   it("opens the search palette", async () => {
@@ -211,7 +211,7 @@ describe("wikilink anchors", () => {
     await startApp();
     await new Promise((r) => setTimeout(r, 60));
 
-    const link = document.querySelector<HTMLElement>(".cm-tsn-wikilink");
+    const link = document.querySelector<HTMLElement>(".cm-fol-wikilink");
     expect(link).not.toBeNull();
     link!.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
     await new Promise((r) => setTimeout(r, 60));
@@ -230,7 +230,7 @@ describe("wikilink anchors", () => {
     await startApp();
     await new Promise((r) => setTimeout(r, 60));
 
-    document.querySelector<HTMLElement>(".cm-tsn-wikilink")!.dispatchEvent(
+    document.querySelector<HTMLElement>(".cm-fol-wikilink")!.dispatchEvent(
       new MouseEvent("mousedown", { bubbles: true }),
     );
     await new Promise((r) => setTimeout(r, 60));

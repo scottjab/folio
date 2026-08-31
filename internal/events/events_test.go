@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/scottjab/tsnotes/internal/events"
+	"github.com/scottjab/folio/internal/events"
 )
 
 type noteChanged struct{ Path string }

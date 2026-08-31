@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/scottjab/tsnotes/internal/share"
-	"github.com/scottjab/tsnotes/internal/vaultpath"
+	"github.com/scottjab/folio/internal/share"
+	"github.com/scottjab/folio/internal/vaultpath"
 )
 
 type shareJSON struct {

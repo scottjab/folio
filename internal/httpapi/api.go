@@ -5,7 +5,7 @@
 // no cookies, tokens, or sessions anywhere, which removes a whole class of bugs
 // and creates exactly one: because the browser authenticates by virtue of being
 // on the tailnet, any page on the public internet could aim a form at
-// https://tsnotes.your-tailnet.ts.net and have it arrive authenticated. That is
+// https://folio.your-tailnet.ts.net and have it arrive authenticated. That is
 // what the CSRF check in middleware.go is for, and why it is not optional.
 package httpapi
 
@@ -19,13 +19,13 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/scottjab/tsnotes/internal/events"
-	"github.com/scottjab/tsnotes/internal/identity"
-	"github.com/scottjab/tsnotes/internal/index"
-	"github.com/scottjab/tsnotes/internal/notes"
-	"github.com/scottjab/tsnotes/internal/share"
-	"github.com/scottjab/tsnotes/internal/store"
-	"github.com/scottjab/tsnotes/internal/vault"
+	"github.com/scottjab/folio/internal/events"
+	"github.com/scottjab/folio/internal/identity"
+	"github.com/scottjab/folio/internal/index"
+	"github.com/scottjab/folio/internal/notes"
+	"github.com/scottjab/folio/internal/share"
+	"github.com/scottjab/folio/internal/store"
+	"github.com/scottjab/folio/internal/vault"
 )
 
 // maxNoteBytes caps a single note. Notes are prose; anything past this is a
@@ -59,7 +59,7 @@ type Deps struct {
 	MCP http.Handler
 }
 
-// API is the HTTP surface of tsnotes.
+// API is the HTTP surface of folio.
 type API struct {
 	Deps
 	mux *http.ServeMux

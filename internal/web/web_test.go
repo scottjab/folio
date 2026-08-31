@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/scottjab/tsnotes/internal/web"
+	"github.com/scottjab/folio/internal/web"
 )
 
 func TestFSAlwaysHasAnIndex(t *testing.T) {
@@ -19,7 +19,7 @@ func TestFSAlwaysHasAnIndex(t *testing.T) {
 
 func TestPlaceholderDetectionTracksTheBundle(t *testing.T) {
 	// The stub and a real build both have a short index.html, so presence of the
-	// bundle is what distinguishes them. Getting this backwards makes tsnotes
+	// bundle is what distinguishes them. Getting this backwards makes folio
 	// lie about whether the UI will work.
 	_, err := fs.Stat(web.FS(), "app.js")
 	bundlePresent := err == nil

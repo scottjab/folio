@@ -7,12 +7,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/scottjab/tsnotes/internal/config"
+	"github.com/scottjab/folio/internal/config"
 )
 
 func writeConfig(t *testing.T, body string) string {
 	t.Helper()
-	p := filepath.Join(t.TempDir(), "tsnotes.json")
+	p := filepath.Join(t.TempDir(), "folio.json")
 	if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
@@ -24,7 +24,7 @@ func TestDefaults(t *testing.T) {
 	if err := c.Validate(); err != nil {
 		t.Fatalf("the defaults must be valid on their own: %v", err)
 	}
-	if c.Hostname != "tsnotes" {
+	if c.Hostname != "folio" {
 		t.Errorf("Hostname = %q", c.Hostname)
 	}
 	if c.CacheTTL <= 0 {
@@ -35,7 +35,7 @@ func TestDefaults(t *testing.T) {
 func TestLoadFile(t *testing.T) {
 	p := writeConfig(t, `{
 		"hostname": "notes",
-		"stateDir": "/var/lib/tsnotes",
+		"stateDir": "/var/lib/folio",
 		"logLevel": "debug",
 		"cacheTTL": "45s",
 		"agents": [{"tag": "tag:notes-agent", "actAs": "alice@github"}]
@@ -48,7 +48,7 @@ func TestLoadFile(t *testing.T) {
 	if c.Hostname != "notes" {
 		t.Errorf("Hostname = %q", c.Hostname)
 	}
-	if c.StateDir != "/var/lib/tsnotes" {
+	if c.StateDir != "/var/lib/folio" {
 		t.Errorf("StateDir = %q", c.StateDir)
 	}
 	if c.CacheTTL.Duration() != 45*time.Second {
@@ -134,7 +134,7 @@ func TestValidate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c := config.Default()
-			c.StateDir = "/tmp/tsnotes"
+			c.StateDir = "/tmp/folio"
 			tt.mutate(&c)
 			err := c.Validate()
 			if err == nil {
@@ -161,14 +161,14 @@ func TestAgentMap(t *testing.T) {
 
 func TestDerivedPaths(t *testing.T) {
 	c := config.Default()
-	c.StateDir = "/var/lib/tsnotes"
-	if got := c.DatabasePath(); got != "/var/lib/tsnotes/tsnotes.db" {
+	c.StateDir = "/var/lib/folio"
+	if got := c.DatabasePath(); got != "/var/lib/folio/folio.db" {
 		t.Errorf("DatabasePath = %q", got)
 	}
-	if got := c.VaultsDir(); got != "/var/lib/tsnotes/vaults" {
+	if got := c.VaultsDir(); got != "/var/lib/folio/vaults" {
 		t.Errorf("VaultsDir = %q", got)
 	}
-	if got := c.TSNetDir(); got != "/var/lib/tsnotes/tsnet" {
+	if got := c.TSNetDir(); got != "/var/lib/folio/tsnet" {
 		t.Errorf("TSNetDir = %q", got)
 	}
 }

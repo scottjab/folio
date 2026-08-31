@@ -8,11 +8,11 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/scottjab/tsnotes/internal/notes"
+	"github.com/scottjab/folio/internal/notes"
 )
 
-// resourceScheme addresses a note as tsnotes://<vault>/<path>.
-const resourceScheme = "tsnotes://"
+// resourceScheme addresses a note as folio://<vault>/<path>.
+const resourceScheme = "folio://"
 
 // addResources exposes notes as MCP resources in addition to tools.
 //
@@ -24,7 +24,7 @@ func (sess *session) addResources(srv *mcp.Server) {
 	srv.AddResourceTemplate(&mcp.ResourceTemplate{
 		Name:        "note",
 		Title:       "Note",
-		URITemplate: "tsnotes://{vault}/{+path}",
+		URITemplate: "folio://{vault}/{+path}",
 		Description: "A markdown note. vault is a vault directory name, or \"me\" for your own; path is vault-relative, for example Daily/2026-08-30.md",
 		MIMEType:    "text/markdown",
 	}, sess.readResource)
@@ -32,13 +32,13 @@ func (sess *session) addResources(srv *mcp.Server) {
 	srv.AddResource(&mcp.Resource{
 		Name:        "index",
 		Title:       "Vault index",
-		URI:         "tsnotes://me/",
+		URI:         "folio://me/",
 		Description: "A listing of every note in your vault, with its title and tags.",
 		MIMEType:    "text/markdown",
 	}, sess.readIndexResource)
 }
 
-// parseResourceURI splits tsnotes://<vault>/<path> into its parts.
+// parseResourceURI splits folio://<vault>/<path> into its parts.
 func parseResourceURI(uri string) (vault, path string, err error) {
 	rest, found := strings.CutPrefix(uri, resourceScheme)
 	if !found {

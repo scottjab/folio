@@ -1,4 +1,4 @@
-// Package vault is the only thing in tsnotes that touches note files.
+// Package vault is the only thing in folio that touches note files.
 //
 // A Vault is one user's directory of markdown, and it is the source of truth for
 // everything: the SQLite index downstream is a cache that can be rebuilt from
@@ -9,7 +9,7 @@
 // enforced by the kernel, not by string checking, which is why vaultpath.Clean
 // validating the same thing is belt and braces rather than duplication.
 //
-// Atomicity: a writer stages into .tsnotes/tmp and renames into place, so a
+// Atomicity: a writer stages into .folio/tmp and renames into place, so a
 // concurrent reader (the indexer, Obsidian, your editor) sees either the whole
 // old file or the whole new one, never a torn half.
 package vault
@@ -29,13 +29,13 @@ import (
 	"time"
 	"uuid"
 
-	"github.com/scottjab/tsnotes/internal/vaultpath"
+	"github.com/scottjab/folio/internal/vaultpath"
 )
 
 // Sidecar layout inside every vault. These names are reserved; vaultpath.Clean
 // refuses to produce a path under sidecarDir, so callers cannot address them.
 const (
-	sidecarDir = ".tsnotes"
+	sidecarDir = ".folio"
 	tmpDir     = sidecarDir + "/tmp"
 	trashDir   = sidecarDir + "/trash"
 
@@ -320,7 +320,7 @@ func (v *Vault) Create(p string, content []byte) (Note, error) {
 	return v.writeLocked(clean, content)
 }
 
-// writeLocked stages into .tsnotes/tmp and renames into place. The caller holds
+// writeLocked stages into .folio/tmp and renames into place. The caller holds
 // the stripe for clean.
 func (v *Vault) writeLocked(clean string, content []byte) (Note, error) {
 	if dir := path.Dir(clean); dir != "." && dir != "/" {
@@ -364,7 +364,7 @@ func (v *Vault) writeLocked(clean string, content []byte) (Note, error) {
 	return Note{Path: clean, SHA256: hashOf(content), Size: int64(len(content)), ModTime: mod}, nil
 }
 
-// Delete moves a note into .tsnotes/trash under a timestamped directory rather
+// Delete moves a note into .folio/trash under a timestamped directory rather
 // than unlinking it. Notes are cheap; a note you meant to keep is not.
 func (v *Vault) Delete(p string) error {
 	clean, err := vaultpath.Clean(p)

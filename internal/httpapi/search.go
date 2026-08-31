@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/scottjab/tsnotes/internal/index"
+	"github.com/scottjab/folio/internal/index"
 )
 
 // hitJSON is one search result as the browser sees it.

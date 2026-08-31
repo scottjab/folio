@@ -1,5 +1,5 @@
 {
-  description = "tsnotes: a self-hosted, tailnet-native markdown notes app";
+  description = "folio: a self-hosted, tailnet-native markdown notes app";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -16,10 +16,10 @@
         version = "0.1.0";
 
         frontend = pkgs.buildNpmPackage {
-          pname = "tsnotes-frontend";
+          pname = "folio-frontend";
           inherit version;
           src = ./web;
-          npmDepsHash = "sha256-/WLnpjafrP/tZTz9SJ+8gCk2E+0ZInZf6mtt4uDpcvM=";
+          npmDepsHash = "sha256-ZbfgimvTkkWldQOq7KktrNd71vpZOtxvCVZKQzNf1Gk=";
           dontNpmInstall = true;
           installPhase = ''
             runHook preInstall
@@ -29,8 +29,8 @@
           '';
         };
 
-        tsnotes = buildGoModule {
-          pname = "tsnotes";
+        folio = buildGoModule {
+          pname = "folio";
           inherit version;
           src = ./.;
           vendorHash = "sha256-T1iT2WyBYW58ghM/OkDpIx9JoKpRV4/EGyYY3q0MidM=";
@@ -49,22 +49,22 @@
 
           ldflags = [ "-s" "-w" "-X" "main.version=${version}" ];
 
-          subPackages = [ "cmd/tsnotes" ];
+          subPackages = [ "cmd/folio" ];
 
           meta = with pkgs.lib; {
             description = "Self-hosted, tailnet-native markdown notes app with WYSIWYG editing and MCP";
-            mainProgram = "tsnotes";
+            mainProgram = "folio";
             platforms = platforms.unix;
           };
         };
       in
       {
         packages = {
-          inherit frontend tsnotes;
-          default = tsnotes;
+          inherit frontend folio;
+          default = folio;
         };
 
-        apps.default = flake-utils.lib.mkApp { drv = tsnotes; };
+        apps.default = flake-utils.lib.mkApp { drv = folio; };
 
         devShells.default = pkgs.mkShell {
           packages = [
@@ -84,33 +84,33 @@
 
           shellHook = ''
             export GOTOOLCHAIN=local
-            echo "tsnotes dev shell: $(go version)"
+            echo "folio dev shell: $(go version)"
           '';
         };
 
         checks = {
           # `nix flake check` builds the binary, which runs `go test ./...` as
           # part of buildGoModule's check phase.
-          build = tsnotes;
+          build = folio;
           inherit frontend;
         };
       })
     // {
       nixosModules.default = { config, lib, pkgs, ... }:
-        let cfg = config.services.tsnotes;
+        let cfg = config.services.folio;
         in {
-          options.services.tsnotes = {
-            enable = lib.mkEnableOption "tsnotes, a tailnet-native markdown notes app";
+          options.services.folio = {
+            enable = lib.mkEnableOption "folio, a tailnet-native markdown notes app";
 
             package = lib.mkOption {
               type = lib.types.package;
               default = self.packages.${pkgs.stdenv.hostPlatform.system}.default;
-              description = "The tsnotes package to run.";
+              description = "The folio package to run.";
             };
 
             hostname = lib.mkOption {
               type = lib.types.str;
-              default = "tsnotes";
+              default = "folio";
               description = ''
                 Tailnet node name. The app is served at
                 https://<hostname>.<your-tailnet>.ts.net, which needs MagicDNS and
@@ -121,7 +121,7 @@
             authKeyFile = lib.mkOption {
               type = lib.types.nullOr lib.types.path;
               default = null;
-              example = "/run/secrets/tsnotes-authkey";
+              example = "/run/secrets/folio-authkey";
               description = ''
                 File holding a Tailscale auth key, needed only on first run. It is
                 passed through systemd's LoadCredential so it never appears in the
@@ -140,23 +140,23 @@
           };
 
           config = lib.mkIf cfg.enable {
-            systemd.services.tsnotes = {
-              description = "tsnotes";
+            systemd.services.folio = {
+              description = "folio";
               after = [ "network-online.target" ];
               wants = [ "network-online.target" ];
               wantedBy = [ "multi-user.target" ];
 
               serviceConfig = {
                 ExecStart = lib.escapeShellArgs ([
-                  "${cfg.package}/bin/tsnotes" "serve"
+                  "${cfg.package}/bin/folio" "serve"
                   "--hostname" cfg.hostname
-                  "--state" "/var/lib/tsnotes"
+                  "--state" "/var/lib/folio"
                 ] ++ lib.optionals (cfg.settings != { }) [
-                  "--config" (pkgs.writers.writeJSON "tsnotes.json" cfg.settings)
+                  "--config" (pkgs.writers.writeJSON "folio.json" cfg.settings)
                 ]);
 
                 DynamicUser = true;
-                StateDirectory = "tsnotes";
+                StateDirectory = "folio";
                 StateDirectoryMode = "0700";
                 Restart = "on-failure";
                 RestartSec = 5;
@@ -164,7 +164,7 @@
                 LoadCredential = lib.optional (cfg.authKeyFile != null)
                   "ts_authkey:${cfg.authKeyFile}";
 
-                # tsnotes reads and writes exactly one directory and talks to the
+                # folio reads and writes exactly one directory and talks to the
                 # tailnet. Nothing else needs to be reachable from it.
                 AmbientCapabilities = [ "CAP_NET_ADMIN" ];
                 CapabilityBoundingSet = [ "CAP_NET_ADMIN" ];

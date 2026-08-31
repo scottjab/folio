@@ -39,7 +39,7 @@ const hide = Decoration.replace({});
 const mark = (className: string) => Decoration.mark({ class: className });
 
 const headingMarks = [
-  "cm-tsn-h1", "cm-tsn-h2", "cm-tsn-h3", "cm-tsn-h4", "cm-tsn-h5", "cm-tsn-h6",
+  "cm-fol-h1", "cm-fol-h2", "cm-fol-h3", "cm-fol-h4", "cm-fol-h5", "cm-fol-h6",
 ];
 
 /** A rendered wikilink. Clicking it navigates; the text stays selectable. */
@@ -65,7 +65,7 @@ class WikilinkWidget extends WidgetType {
 
   toDOM() {
     const a = document.createElement("a");
-    a.className = "cm-tsn-wikilink" + (this.resolved ? "" : " cm-tsn-unresolved");
+    a.className = "cm-fol-wikilink" + (this.resolved ? "" : " cm-fol-unresolved");
     a.textContent = this.label;
     a.title = this.resolved
       ? this.target
@@ -95,7 +95,7 @@ class TagWidget extends WidgetType {
 
   toDOM() {
     const el = document.createElement("span");
-    el.className = "cm-tsn-tag";
+    el.className = "cm-fol-tag";
     el.textContent = "#" + this.tag;
     el.addEventListener("mousedown", (e) => {
       e.preventDefault();
@@ -122,7 +122,7 @@ class ImageWidget extends WidgetType {
 
   toDOM() {
     const wrap = document.createElement("div");
-    wrap.className = "cm-tsn-embed";
+    wrap.className = "cm-fol-embed";
     const img = document.createElement("img");
     img.src = this.src;
     img.alt = this.alt;
@@ -145,7 +145,7 @@ class TaskWidget extends WidgetType {
   toDOM(view: EditorView) {
     const box = document.createElement("input");
     box.type = "checkbox";
-    box.className = "cm-tsn-task";
+    box.className = "cm-fol-task";
     box.checked = this.checked;
     box.addEventListener("mousedown", (e) => e.preventDefault());
     box.addEventListener("change", () => {
@@ -170,7 +170,7 @@ class RuleWidget extends WidgetType {
   }
   toDOM() {
     const el = document.createElement("hr");
-    el.className = "cm-tsn-rule";
+    el.className = "cm-fol-rule";
     return el;
   }
 }
@@ -182,7 +182,7 @@ class BulletWidget extends WidgetType {
   }
   toDOM() {
     const el = document.createElement("span");
-    el.className = "cm-tsn-bullet";
+    el.className = "cm-fol-bullet";
     el.textContent = "•";
     return el;
   }
@@ -288,10 +288,10 @@ function decorateNode(
     case "Strikethrough": {
       const cls =
         name === "StrongEmphasis"
-          ? "cm-tsn-strong"
+          ? "cm-fol-strong"
           : name === "Emphasis"
-            ? "cm-tsn-em"
-            : "cm-tsn-strike";
+            ? "cm-fol-em"
+            : "cm-fol-strike";
       out.push(mark(cls).range(node.from, node.to));
       for (let c = node.node.firstChild; c; c = c.nextSibling) {
         if (c.name === "EmphasisMark" || c.name === "StrikethroughMark") {
@@ -302,7 +302,7 @@ function decorateNode(
     }
 
     case "InlineCode": {
-      out.push(mark("cm-tsn-code").range(node.from, node.to));
+      out.push(mark("cm-fol-code").range(node.from, node.to));
       for (let c = node.node.firstChild; c; c = c.nextSibling) {
         if (c.name === "CodeMark") conceal(c.from, c.to);
       }
@@ -360,7 +360,7 @@ function decorateNode(
         if (c.name === "URL") urlNode = { from: c.from, to: c.to };
       }
       if (marks.length >= 2 && urlNode) {
-        out.push(mark("cm-tsn-link").range(node.from, node.to));
+        out.push(mark("cm-fol-link").range(node.from, node.to));
         conceal(marks[0].from, marks[0].to);
         // From the closing "]" through the ")" is everything but the label.
         conceal(marks[1].from, node.to);
@@ -406,7 +406,7 @@ function decorateNode(
     case "Blockquote": {
       for (let line = doc.lineAt(node.from).number; ; line++) {
         const l = doc.line(line);
-        out.push(Decoration.line({ class: "cm-tsn-quote" }).range(l.from));
+        out.push(Decoration.line({ class: "cm-fol-quote" }).range(l.from));
         if (l.to >= node.to) break;
       }
       return;
@@ -427,7 +427,7 @@ function decorateNode(
       // fences would make it impossible to tell where a block ends.
       for (let line = doc.lineAt(node.from).number; ; line++) {
         const l = doc.line(line);
-        out.push(Decoration.line({ class: "cm-tsn-fence" }).range(l.from));
+        out.push(Decoration.line({ class: "cm-fol-fence" }).range(l.from));
         if (l.to >= node.to) break;
       }
       return;
@@ -482,7 +482,7 @@ export function livePreview(handlers: LivePreviewHandlers) {
       eventHandlers: {
         mousedown(event) {
           const target = event.target as HTMLElement;
-          return target.closest(".cm-tsn-wikilink, .cm-tsn-tag") !== null;
+          return target.closest(".cm-fol-wikilink, .cm-fol-tag") !== null;
         },
       },
     },

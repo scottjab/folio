@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/scottjab/tsnotes/internal/store"
+	"github.com/scottjab/folio/internal/store"
 )
 
 func newDB(t *testing.T) *store.DB {
@@ -33,7 +33,7 @@ func TestOpenAppliesMigrations(t *testing.T) {
 		t.Errorf("SchemaVersion = %d, want at least 1", v)
 	}
 
-	// Every table the rest of tsnotes depends on must exist after Open.
+	// Every table the rest of folio depends on must exist after Open.
 	names, err := db.All[string](context.Background(),
 		`SELECT name FROM sqlite_master WHERE type IN ('table','view') ORDER BY name`)
 	if err != nil {

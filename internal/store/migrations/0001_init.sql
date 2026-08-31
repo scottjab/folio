@@ -36,7 +36,7 @@ CREATE TABLE shares (
 CREATE INDEX shares_grantee ON shares (grantee_login);
 CREATE INDEX shares_vault ON shares (vault_id);
 
--- Derived tables below. `tsnotes index rebuild` truncates and repopulates these
+-- Derived tables below. `folio index rebuild` truncates and repopulates these
 -- from the markdown files, and must never touch anything above.
 CREATE TABLE notes (
     id          INTEGER PRIMARY KEY,

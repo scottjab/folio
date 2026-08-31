@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/scottjab/tsnotes/internal/identity"
+	"github.com/scottjab/folio/internal/identity"
 )
 
 // authedHandler is a handler that runs with an authenticated user in context.
@@ -29,11 +29,11 @@ func (a *API) withIdentity(next authedHandler) http.Handler {
 
 // withCSRF blocks cross-site state-changing requests.
 //
-// This is load-bearing, not defence in depth. tsnotes authenticates by network
+// This is load-bearing, not defence in depth. folio authenticates by network
 // position, so a browser sitting on the tailnet will happily attach the user's
 // identity to a request initiated by any page anywhere. Without this check,
 // https://evil.example.com could contain a form that POSTs to
-// https://tsnotes.your-tailnet.ts.net/api/vaults/me/notes and it would be
+// https://folio.your-tailnet.ts.net/api/vaults/me/notes and it would be
 // accepted as you.
 //
 // The check is the modern, token-free one: prefer the browser's own

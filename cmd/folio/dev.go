@@ -13,22 +13,22 @@ import (
 	"strings"
 	"time"
 
-	"github.com/scottjab/tsnotes/internal/config"
-	"github.com/scottjab/tsnotes/internal/httpapi"
-	"github.com/scottjab/tsnotes/internal/identity"
-	"github.com/scottjab/tsnotes/internal/mcpsrv"
-	"github.com/scottjab/tsnotes/internal/tsserve"
-	"github.com/scottjab/tsnotes/internal/web"
+	"github.com/scottjab/folio/internal/config"
+	"github.com/scottjab/folio/internal/httpapi"
+	"github.com/scottjab/folio/internal/identity"
+	"github.com/scottjab/folio/internal/mcpsrv"
+	"github.com/scottjab/folio/internal/tsserve"
+	"github.com/scottjab/folio/internal/web"
 )
 
-// runDev starts tsnotes without a tailnet.
+// runDev starts folio without a tailnet.
 //
 // Everything except identity behaves exactly as it does in production: the same
 // API, the same MCP server, the same editor, the same files on disk. Only the
 // "who is asking" step is replaced, because that is the one part that needs a
 // tailnet to answer.
 func runDev(ctx context.Context, args []string) error {
-	fs := flag.NewFlagSet("tsnotes dev", flag.ContinueOnError)
+	fs := flag.NewFlagSet("folio dev", flag.ContinueOnError)
 	var allowStubUI bool
 	cfg, err := loadConfig(fs, args, func(fs *flag.FlagSet, c *config.Config) {
 		fs.StringVar(&c.DevAddr, "addr", "127.0.0.1:8080", "loopback address to listen on")
@@ -40,7 +40,7 @@ func runDev(ctx context.Context, args []string) error {
 	}
 	// The state directory defaults next to the source rather than in the real
 	// one, so experimenting here cannot touch notes you care about.
-	if !flagWasSet(fs, "state") && os.Getenv("TSNOTES_STATE_DIR") == "" {
+	if !flagWasSet(fs, "state") && os.Getenv("FOLIO_STATE_DIR") == "" {
 		cfg.StateDir = "./dev-state"
 	}
 	if !allowStubUI {
@@ -73,7 +73,7 @@ func defaultDevLogin() string {
 	return name + "@localhost"
 }
 
-// serveDev runs tsnotes on a local address with a fixed identity, bypassing the
+// serveDev runs folio on a local address with a fixed identity, bypassing the
 // tailnet entirely.
 //
 // This exists so the app can be worked on without a tailnet auth key, and so
@@ -130,7 +130,7 @@ func serveDev(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 
 	fmt.Fprintf(os.Stderr, strings.Join([]string{
 		"",
-		"  tsnotes dev  ->  http://%s",
+		"  folio dev  ->  http://%s",
 		"",
 		"  Every request is treated as %s. There is no tailnet check, which is why",
 		"  this refuses to listen anywhere but loopback. Do not run it as a server.",

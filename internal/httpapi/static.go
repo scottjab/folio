@@ -55,9 +55,9 @@ func fallbackApp() fs.FS {
 	return fstest.MapFS{
 		"index.html": &fstest.MapFile{Data: []byte(`<!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><title>tsnotes</title></head>
+<head><meta charset="utf-8"><title>folio</title></head>
 <body>
-<h1>tsnotes</h1>
+<h1>folio</h1>
 <p>The API is running, but no web bundle was built into this binary.</p>
 <p>Build it with <code>nix build .#</code>, or run <code>npm run build</code> in <code>web/</code>.</p>
 </body>

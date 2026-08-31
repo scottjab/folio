@@ -1,5 +1,5 @@
 // Package vaultpath owns every rule about what a path inside a vault may look
-// like. Nothing else in tsnotes is allowed to hand-roll path handling: if it
+// like. Nothing else in folio is allowed to hand-roll path handling: if it
 // touches a vault-relative path, it goes through here first.
 //
 // Paths are always vault-relative, always forward-slash separated, always NFC
@@ -20,7 +20,7 @@ import (
 
 // reservedDir is our own sidecar directory. Callers may never address it
 // directly; internal/vault reaches it through unexported helpers instead.
-const reservedDir = ".tsnotes"
+const reservedDir = ".folio"
 
 // ErrInvalidPath is the base for every rejection out of [Clean]. Callers can
 // test with errors.Is and still surface the specific reason to the user.

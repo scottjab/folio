@@ -10,8 +10,8 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/scottjab/tsnotes/internal/identity"
-	"github.com/scottjab/tsnotes/internal/store"
+	"github.com/scottjab/folio/internal/identity"
+	"github.com/scottjab/folio/internal/store"
 )
 
 func newResolver(t *testing.T, whois identity.WhoIsFunc, opts ...func(*identity.Options)) (*identity.Resolver, *store.DB) {
@@ -267,7 +267,7 @@ func TestAgentSharesTheVaultOfTheUserItActsAs(t *testing.T) {
 
 func TestAgentCannotConjureAUser(t *testing.T) {
 	// A tagged node may borrow an identity, never mint one. If the mapping names
-	// someone tsnotes has never seen, that is a configuration mistake (a typo in
+	// someone folio has never seen, that is a configuration mistake (a typo in
 	// the login, most likely) and it should be loud rather than silently
 	// creating an empty vault nobody can reach.
 	tagged := identity.WhoIs{Tags: []string{"tag:notes-agent"}, NodeName: "agent-box"}

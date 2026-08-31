@@ -7,7 +7,7 @@ all: web build
 
 ## build: compile the binary with the frontend embedded
 build: embed
-	CGO_ENABLED=0 go build -ldflags "-s -w" -o tsnotes ./cmd/tsnotes
+	CGO_ENABLED=0 go build -ldflags "-s -w" -o folio ./cmd/folio
 
 ## embed: copy the bundle into the package go:embed reads
 # Copies into dist/ rather than replacing it, so the tracked .gitkeep survives.
@@ -42,11 +42,11 @@ check: lint test race
 
 ## dev: run locally with a fixed identity, no tailnet needed
 dev: embed
-	go run ./cmd/tsnotes dev -log-level debug
+	go run ./cmd/folio dev -log-level debug
 
 ## doctor: report on a state directory
 doctor:
-	go run ./cmd/tsnotes doctor -state ./dev-state
+	go run ./cmd/folio doctor -state ./dev-state
 
 ## nix-hashes: refresh the two hashes the flake pins
 # Any change to package-lock.json or go.mod invalidates one of these, and the
@@ -61,5 +61,5 @@ nix-hashes:
 LIB_FAKE = sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
 
 clean:
-	rm -rf tsnotes result dev-state web/dist web/node_modules
+	rm -rf folio result dev-state web/dist web/node_modules
 	find internal/web/dist -mindepth 1 ! -name .gitkeep -delete

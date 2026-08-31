@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/scottjab/tsnotes/internal/vault"
-	"github.com/scottjab/tsnotes/internal/watch"
+	"github.com/scottjab/folio/internal/vault"
+	"github.com/scottjab/folio/internal/watch"
 )
 
 // These exercise real fsnotify against a real directory, so they use real time

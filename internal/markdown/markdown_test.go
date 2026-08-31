@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/scottjab/tsnotes/internal/markdown"
+	"github.com/scottjab/folio/internal/markdown"
 )
 
 func TestSplitFrontmatter(t *testing.T) {
@@ -251,7 +251,7 @@ func TestHeadingsIgnoreCodeFences(t *testing.T) {
 func TestWikilinks(t *testing.T) {
 	src := `
 Plain [[Target]] here.
-Aliased [[Projects/tsnotes|the project]].
+Aliased [[Projects/folio|the project]].
 Anchored [[Notes/x#Some Heading]].
 Both [[a/b#H|alias]].
 Embed ![[attachments/diagram.png]].
@@ -264,7 +264,7 @@ Embedded note ![[Other Note]].
 
 	want := []markdown.Link{
 		{Kind: markdown.LinkWiki, Target: "Target"},
-		{Kind: markdown.LinkWiki, Target: "Projects/tsnotes", Alias: "the project"},
+		{Kind: markdown.LinkWiki, Target: "Projects/folio", Alias: "the project"},
 		{Kind: markdown.LinkWiki, Target: "Notes/x", Anchor: "Some Heading"},
 		{Kind: markdown.LinkWiki, Target: "a/b", Anchor: "H", Alias: "alias"},
 		{Kind: markdown.LinkEmbed, Target: "attachments/diagram.png"},
@@ -274,14 +274,14 @@ Embedded note ![[Other Note]].
 }
 
 func TestMarkdownLinks(t *testing.T) {
-	src := "See [the project](Projects/tsnotes.md) and [ext](https://example.com) and ![img](a.png).\n"
+	src := "See [the project](Projects/folio.md) and [ext](https://example.com) and ![img](a.png).\n"
 	doc, err := markdown.Parse("n.md", []byte(src))
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
 	}
 	// External links are not vault links and must not create dangling backlinks.
 	want := []markdown.Link{
-		{Kind: markdown.LinkMarkdown, Target: "Projects/tsnotes.md", Alias: "the project"},
+		{Kind: markdown.LinkMarkdown, Target: "Projects/folio.md", Alias: "the project"},
 		{Kind: markdown.LinkEmbed, Target: "a.png", Alias: "img"},
 	}
 	assertLinks(t, doc.Links, want)
@@ -390,19 +390,19 @@ func TestResolveWikilink(t *testing.T) {
 	// Obsidian resolves [[X]] against the whole vault, preferring an exact path
 	// match, then a unique basename match, relative to the linking note.
 	vault := []string{
-		"Projects/tsnotes.md",
+		"Projects/folio.md",
 		"Daily/2026-08-30.md",
-		"Archive/tsnotes.md",
+		"Archive/folio.md",
 		"Notes/unique.md",
 		"attachments/diagram.png",
 	}
 	tests := []struct {
 		name, from, target, want string
 	}{
-		{"exact path", "Daily/x.md", "Projects/tsnotes", "Projects/tsnotes.md"},
-		{"exact path with ext", "Daily/x.md", "Projects/tsnotes.md", "Projects/tsnotes.md"},
+		{"exact path", "Daily/x.md", "Projects/folio", "Projects/folio.md"},
+		{"exact path with ext", "Daily/x.md", "Projects/folio.md", "Projects/folio.md"},
 		{"unique basename", "Daily/x.md", "unique", "Notes/unique.md"},
-		{"ambiguous basename prefers same folder", "Archive/y.md", "tsnotes", "Archive/tsnotes.md"},
+		{"ambiguous basename prefers same folder", "Archive/y.md", "folio", "Archive/folio.md"},
 		{"attachment", "Daily/x.md", "attachments/diagram.png", "attachments/diagram.png"},
 		{"dangling", "Daily/x.md", "Nope", ""},
 	}
@@ -435,53 +435,53 @@ func TestRewriteWikilinks(t *testing.T) {
 	}{
 		{
 			name: "plain link",
-			src:  "See [[Projects/tsnotes]] today.\n",
-			want: "See [[Archive/tsnotes]] today.\n",
+			src:  "See [[Projects/folio]] today.\n",
+			want: "See [[Archive/folio]] today.\n",
 		},
 		{
 			name: "keeps the alias",
-			src:  "See [[Projects/tsnotes|the project]].\n",
-			want: "See [[Archive/tsnotes|the project]].\n",
+			src:  "See [[Projects/folio|the project]].\n",
+			want: "See [[Archive/folio|the project]].\n",
 		},
 		{
 			name: "keeps the anchor",
-			src:  "See [[Projects/tsnotes#Design]].\n",
-			want: "See [[Archive/tsnotes#Design]].\n",
+			src:  "See [[Projects/folio#Design]].\n",
+			want: "See [[Archive/folio#Design]].\n",
 		},
 		{
 			name: "keeps anchor and alias together",
-			src:  "See [[Projects/tsnotes#Design|design notes]].\n",
-			want: "See [[Archive/tsnotes#Design|design notes]].\n",
+			src:  "See [[Projects/folio#Design|design notes]].\n",
+			want: "See [[Archive/folio#Design|design notes]].\n",
 		},
 		{
 			name: "keeps the embed marker",
-			src:  "![[Projects/tsnotes]]\n",
-			want: "![[Archive/tsnotes]]\n",
+			src:  "![[Projects/folio]]\n",
+			want: "![[Archive/folio]]\n",
 		},
 		{
 			name: "author wrote the extension, so we keep one",
-			src:  "See [[Projects/tsnotes.md]].\n",
-			want: "See [[Archive/tsnotes.md]].\n",
+			src:  "See [[Projects/folio.md]].\n",
+			want: "See [[Archive/folio.md]].\n",
 		},
 		{
 			name: "several links in one file",
-			src:  "[[Projects/tsnotes]] and [[Projects/tsnotes|x]] and [[Other]].\n",
-			want: "[[Archive/tsnotes]] and [[Archive/tsnotes|x]] and [[Other]].\n",
+			src:  "[[Projects/folio]] and [[Projects/folio|x]] and [[Other]].\n",
+			want: "[[Archive/folio]] and [[Archive/folio|x]] and [[Other]].\n",
 		},
 		{
 			name: "unrelated links are untouched",
-			src:  "[[Projects/other]] and [[Projects/tsnotes2]].\n",
-			want: "[[Projects/other]] and [[Projects/tsnotes2]].\n",
+			src:  "[[Projects/other]] and [[Projects/folio2]].\n",
+			want: "[[Projects/other]] and [[Projects/folio2]].\n",
 		},
 		{
 			name: "basename links are left alone because they still resolve",
-			src:  "See [[tsnotes]].\n",
-			want: "See [[tsnotes]].\n",
+			src:  "See [[folio]].\n",
+			want: "See [[folio]].\n",
 		},
 		{
 			name: "code regions are documentation, not links",
-			src:  "`[[Projects/tsnotes]]`\n\n```\n[[Projects/tsnotes]]\n```\n",
-			want: "`[[Projects/tsnotes]]`\n\n```\n[[Projects/tsnotes]]\n```\n",
+			src:  "`[[Projects/folio]]`\n\n```\n[[Projects/folio]]\n```\n",
+			want: "`[[Projects/folio]]`\n\n```\n[[Projects/folio]]\n```\n",
 		},
 		{
 			name: "no links at all",
@@ -492,7 +492,7 @@ func TestRewriteWikilinks(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := markdown.RewriteWikilinks([]byte(tt.src), "Daily/x.md", "Projects/tsnotes.md", "Archive/tsnotes.md")
+			got := markdown.RewriteWikilinks([]byte(tt.src), "Daily/x.md", "Projects/folio.md", "Archive/folio.md")
 			if string(got) != tt.want {
 				t.Errorf("RewriteWikilinks:\n got %q\nwant %q", got, tt.want)
 			}
@@ -501,9 +501,9 @@ func TestRewriteWikilinks(t *testing.T) {
 }
 
 func TestRewriteWikilinksLeavesEverythingElseByteExact(t *testing.T) {
-	src := "---\ntags: [a]\n---\n# H\n\ntrailing space   \n\n\ttab\n\n[[Projects/tsnotes]]\n"
-	got := markdown.RewriteWikilinks([]byte(src), "Daily/x.md", "Projects/tsnotes.md", "Archive/tsnotes.md")
-	want := strings.Replace(src, "[[Projects/tsnotes]]", "[[Archive/tsnotes]]", 1)
+	src := "---\ntags: [a]\n---\n# H\n\ntrailing space   \n\n\ttab\n\n[[Projects/folio]]\n"
+	got := markdown.RewriteWikilinks([]byte(src), "Daily/x.md", "Projects/folio.md", "Archive/folio.md")
+	want := strings.Replace(src, "[[Projects/folio]]", "[[Archive/folio]]", 1)
 	if string(got) != want {
 		t.Errorf("rewrite touched more than the link:\n got %q\nwant %q", got, want)
 	}

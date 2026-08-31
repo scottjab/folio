@@ -9,9 +9,9 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/scottjab/tsnotes/internal/notes"
-	"github.com/scottjab/tsnotes/internal/share"
-	"github.com/scottjab/tsnotes/internal/vaultpath"
+	"github.com/scottjab/folio/internal/notes"
+	"github.com/scottjab/folio/internal/share"
+	"github.com/scottjab/folio/internal/vaultpath"
 )
 
 // Every tool's input and output is a plain Go struct. mcp.AddTool derives the
@@ -76,7 +76,7 @@ func (sess *session) addTools(srv *mcp.Server) {
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "delete_note",
-		Description: "Move a note to the vault's trash. It is recoverable from .tsnotes/trash on disk, but is no longer searchable or linkable.",
+		Description: "Move a note to the vault's trash. It is recoverable from .folio/trash on disk, but is no longer searchable or linkable.",
 	}, sess.deleteNote)
 
 	mcp.AddTool(srv, &mcp.Tool{
@@ -208,7 +208,7 @@ func (sess *session) listNotes(ctx context.Context, _ *mcp.CallToolRequest, in l
 }
 
 type readInput struct {
-	Path  string `json:"path" jsonschema:"Vault-relative path, for example Projects/tsnotes.md"`
+	Path  string `json:"path" jsonschema:"Vault-relative path, for example Projects/folio.md"`
 	Vault string `json:"vault,omitzero" jsonschema:"Which vault. Defaults to this user's own."`
 }
 
@@ -362,7 +362,7 @@ func (sess *session) deleteNote(ctx context.Context, _ *mcp.CallToolRequest, in 
 	if err := sess.Notes.Delete(ctx, sc, in.Path); err != nil {
 		return nil, okOutput{}, toolErr(err)
 	}
-	return nil, okOutput{OK: true, Message: "moved to trash; recoverable from .tsnotes/trash"}, nil
+	return nil, okOutput{OK: true, Message: "moved to trash; recoverable from .folio/trash"}, nil
 }
 
 type moveInput struct {
@@ -578,7 +578,7 @@ func (sess *session) shareInfos(ctx context.Context, in []share.Share) []shareIn
 
 type shareInput struct {
 	Path     string `json:"path" jsonschema:"Note or folder in this user's own vault."`
-	Grantee  string `json:"grantee" jsonschema:"The tailnet login to share with, for example alice@github. They must have used tsnotes at least once."`
+	Grantee  string `json:"grantee" jsonschema:"The tailnet login to share with, for example alice@github. They must have used folio at least once."`
 	Perm     string `json:"perm,omitzero" jsonschema:"Either read or write. Defaults to read."`
 	IsFolder bool   `json:"isFolder,omitzero" jsonschema:"Share a whole folder and everything beneath it."`
 }

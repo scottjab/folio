@@ -1,4 +1,4 @@
-# tsnotes
+# folio
 
 Self-hosted markdown notes on your tailnet, with an Obsidian-style editor and a
 full MCP server so your agents can work on the same notes you do.
@@ -21,7 +21,7 @@ index included, is derived from them and can be thrown away and rebuilt.
   the sidebar becomes a drawer, so it works on a phone.
 - **Real full-text search.** SQLite FTS5 with BM25 ranking and highlighted
   snippets. `tag:go`, `path:Daily`, `"exact phrase"`, `prefix*`, `-exclusions`.
-- **Tailnet identity.** No passwords, no sessions, no cookies. tsnotes asks
+- **Tailnet identity.** No passwords, no sessions, no cookies. folio asks
   tailscaled who is on the other end of the connection. Everyone gets their own
   vault.
 - **Sharing.** Grant another tailnet user read or write on a note or a folder.
@@ -41,11 +41,11 @@ The browser app is a bundle that has to be built before it can be embedded, so
 use one of the commands that does both:
 
 ```sh
-nix build .#     # hermetic, into ./result/bin/tsnotes
-make build       # bundles the app, then compiles, into ./tsnotes
+nix build .#     # hermetic, into ./result/bin/folio
+make build       # bundles the app, then compiles, into ./folio
 ```
 
-Plain `go build ./cmd/tsnotes` compiles without the bundle. That binary still
+Plain `go build ./cmd/folio` compiles without the bundle. That binary still
 serves the API and MCP perfectly well, but it has no browser UI, so it refuses
 to start unless you pass `--allow-stub-ui` and tells you which command to run
 instead. If you want to use `go build` directly, run `go generate ./...` first
@@ -61,7 +61,7 @@ make dev             # http://127.0.0.1:8080
 Or, from a built binary, with no flags at all:
 
 ```sh
-tsnotes dev
+folio dev
 ```
 
 `dev` runs the real API, the real MCP server, the real editor, and writes real
@@ -75,28 +75,28 @@ in `./dev-state` so experimenting cannot touch notes you care about.
 ```sh
 nix build .#
 export TS_AUTHKEY=tskey-auth-...          # first run only
-./result/bin/tsnotes serve --hostname tsnotes
+./result/bin/folio serve --hostname folio
 ```
 
 Ctrl-C or `SIGTERM` shuts down gracefully: open event streams are closed,
 in-flight requests get up to 15 seconds to finish, and a second Ctrl-C exits
 immediately.
 
-Then open `https://tsnotes.<your-tailnet>.ts.net`. The tailnet needs MagicDNS
+Then open `https://folio.<your-tailnet>.ts.net`. The tailnet needs MagicDNS
 and HTTPS certificates enabled, both under DNS in the admin console.
 
 On NixOS:
 
 ```nix
 {
-  inputs.tsnotes.url = "github:scottjab/tsnotes";
+  inputs.folio.url = "github:scottjab/folio";
 
   # in your configuration
-  imports = [ inputs.tsnotes.nixosModules.default ];
-  services.tsnotes = {
+  imports = [ inputs.folio.nixosModules.default ];
+  services.folio = {
     enable = true;
     hostname = "notes";
-    authKeyFile = "/run/secrets/tsnotes-authkey";
+    authKeyFile = "/run/secrets/folio-authkey";
   };
 }
 ```
@@ -105,15 +105,15 @@ On NixOS:
 
 ```
 $STATE_DIR/
-  tsnotes.db                     SQLite: the index, plus users and shares
+  folio.db                     SQLite: the index, plus users and shares
   tsnet/                         tailnet node state
   vaults/
     you-github/                  one directory per tailnet user
       Daily/2026-08-30.md
-      Projects/tsnotes.md
+      Projects/folio.md
       attachments/diagram.png
       .obsidian/                 preserved, never indexed
-      .tsnotes/{tmp,trash}/      atomic-write staging and deleted notes
+      .folio/{tmp,trash}/      atomic-write staging and deleted notes
 ```
 
 A note is ordinary markdown:
@@ -126,7 +126,7 @@ tags: [daily, go]
 
 # Thursday
 
-Shipped the [[Projects/tsnotes]] indexer. Still owe #go127 a writeup.
+Shipped the [[Projects/folio]] indexer. Still owe #go127 a writeup.
 ```
 
 The `id` is written once, when the note is created, and never rewritten. It is
@@ -136,20 +136,20 @@ what lets a note keep its identity across a rename.
 disagrees with the files, the files win:
 
 ```sh
-tsnotes doctor                # what does the index think, and does it match?
-tsnotes index sync            # reconcile the difference
-tsnotes index rebuild         # reconstruct the index from the files entirely
+folio doctor                # what does the index think, and does it match?
+folio index sync            # reconcile the difference
+folio index rebuild         # reconstruct the index from the files entirely
 ```
 
 None of these touch users, vaults, or shares, which is why `index rebuild` is
-the supported recovery path rather than deleting `tsnotes.db`.
+the supported recovery path rather than deleting `folio.db`.
 
 ## Connecting an agent
 
 Most MCP clients can point straight at the HTTP endpoint:
 
 ```json
-{ "mcpServers": { "tsnotes": { "url": "https://tsnotes.your-tailnet.ts.net/mcp" } } }
+{ "mcpServers": { "folio": { "url": "https://folio.your-tailnet.ts.net/mcp" } } }
 ```
 
 For a client that only speaks stdio:
@@ -157,9 +157,9 @@ For a client that only speaks stdio:
 ```json
 {
   "mcpServers": {
-    "tsnotes": {
-      "command": "tsnotes",
-      "args": ["mcp", "--server", "https://tsnotes.your-tailnet.ts.net"]
+    "folio": {
+      "command": "folio",
+      "args": ["mcp", "--server", "https://folio.your-tailnet.ts.net"]
     }
   }
 }
@@ -216,7 +216,7 @@ nix flake check     # builds everything, runs the Go tests
 Layout:
 
 ```
-cmd/tsnotes/        CLI: serve, dev, mcp, index, doctor, version
+cmd/folio/        CLI: serve, dev, mcp, index, doctor, version
 internal/
   vaultpath/        every rule about what a vault path may look like
   markdown/         parse frontmatter, headings, wikilinks, tags, plaintext
@@ -224,7 +224,7 @@ internal/
   store/            SQLite, migrations, generic query methods
   index/            indexer, FTS5 query translator, search, backlinks
   notes/            the operations layer both front ends share
-  identity/         tailnet WhoIs to a tsnotes user
+  identity/         tailnet WhoIs to a folio user
   share/            who may read or write what
   watch/            debouncer and fsnotify wiring for external edits
   events/           typed in-process pub/sub

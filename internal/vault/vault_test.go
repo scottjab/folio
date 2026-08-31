@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/scottjab/tsnotes/internal/vault"
-	"github.com/scottjab/tsnotes/internal/vaultpath"
+	"github.com/scottjab/folio/internal/vault"
+	"github.com/scottjab/folio/internal/vaultpath"
 )
 
 var fixedTime = time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC)
@@ -36,7 +36,7 @@ func TestOpenCreatesLayout(t *testing.T) {
 	}
 	defer v.Close()
 
-	for _, sub := range []string{".tsnotes/tmp", ".tsnotes/trash"} {
+	for _, sub := range []string{".folio/tmp", ".folio/trash"} {
 		if fi, err := os.Stat(filepath.Join(dir, sub)); err != nil || !fi.IsDir() {
 			t.Errorf("expected %s to exist as a directory: %v", sub, err)
 		}
@@ -203,7 +203,7 @@ func TestDeleteMovesToTrash(t *testing.T) {
 		t.Fatalf("Delete: %v", err)
 	}
 
-	trash := filepath.Join(v.Dir(), ".tsnotes", "trash")
+	trash := filepath.Join(v.Dir(), ".folio", "trash")
 	var found string
 	filepath.WalkDir(trash, func(p string, d os.DirEntry, err error) error {
 		if err == nil && !d.IsDir() {
@@ -212,7 +212,7 @@ func TestDeleteMovesToTrash(t *testing.T) {
 		return nil
 	})
 	if found == "" {
-		t.Fatal("delete did not leave anything in .tsnotes/trash")
+		t.Fatal("delete did not leave anything in .folio/trash")
 	}
 	if !strings.Contains(found, "2026-08-30T12-00-00Z") {
 		t.Errorf("trash entry %q is not timestamped", found)
@@ -265,7 +265,7 @@ func TestList(t *testing.T) {
 	mustWrite(t, v.Dir(), ".obsidian/app.json", "{}")
 	mustMkdir(t, v.Dir(), ".git")
 	mustWrite(t, v.Dir(), ".git/config", "[core]")
-	mustWrite(t, v.Dir(), ".tsnotes/tmp/leftover", "junk")
+	mustWrite(t, v.Dir(), ".folio/tmp/leftover", "junk")
 
 	entries, err := v.List()
 	if err != nil {
@@ -299,7 +299,7 @@ func TestListNotes(t *testing.T) {
 
 func TestPathEscapeIsRefused(t *testing.T) {
 	v := newVault(t)
-	for _, p := range []string{"../escape.md", "a/../../b.md", ".tsnotes/tmp/x", "", "."} {
+	for _, p := range []string{"../escape.md", "a/../../b.md", ".folio/tmp/x", "", "."} {
 		if _, err := v.Write(p, []byte("x"), ""); !errors.Is(err, vaultpath.ErrInvalidPath) {
 			t.Errorf("Write(%q) = %v, want ErrInvalidPath", p, err)
 		}
@@ -404,9 +404,9 @@ func TestWritesAreAtomic(t *testing.T) {
 	wg.Wait()
 
 	// The staging area must not be left full of debris.
-	tmp, _ := os.ReadDir(filepath.Join(v.Dir(), ".tsnotes", "tmp"))
+	tmp, _ := os.ReadDir(filepath.Join(v.Dir(), ".folio", "tmp"))
 	if len(tmp) != 0 {
-		t.Errorf("%d temp files left behind in .tsnotes/tmp", len(tmp))
+		t.Errorf("%d temp files left behind in .folio/tmp", len(tmp))
 	}
 }
 

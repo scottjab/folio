@@ -1,4 +1,4 @@
-// Package tsserve puts tsnotes on the tailnet.
+// Package tsserve puts folio on the tailnet.
 //
 // It owns the tsnet node and the one adapter between Tailscale's world and ours:
 // turning a WhoIs response into an [identity.WhoIs]. Confining the tailscale
@@ -21,7 +21,7 @@ import (
 	"tailscale.com/client/local"
 	"tailscale.com/tsnet"
 
-	"github.com/scottjab/tsnotes/internal/identity"
+	"github.com/scottjab/folio/internal/identity"
 )
 
 // Options configures the tailnet node.
@@ -67,7 +67,7 @@ func Start(ctx context.Context, opts Options) (*Server, error) {
 		Dir:      opts.StateDir,
 		AuthKey:  opts.AuthKey,
 		// tsnet logs every DERP and netcheck detail at info. Route it to debug
-		// unless asked, so tsnotes' own logs stay readable.
+		// unless asked, so folio' own logs stay readable.
 		Logf: func(format string, args ...any) {
 			opts.Log.Debug("tsnet: " + strings.TrimSpace(fmt.Sprintf(format, args...)))
 		},

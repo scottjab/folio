@@ -8,8 +8,8 @@ describe("VaultIndex.resolve", () => {
     idx = new VaultIndex();
     idx.replace(
       [
-        "Projects/tsnotes.md",
-        "Archive/tsnotes.md",
+        "Projects/folio.md",
+        "Archive/folio.md",
         "Notes/unique.md",
         "Daily/2026-08-30.md",
         "attachments/diagram.png",
@@ -18,8 +18,8 @@ describe("VaultIndex.resolve", () => {
   });
 
   it("prefers an exact path", () => {
-    expect(idx.resolve("Projects/tsnotes.md")).toBe("Projects/tsnotes.md");
-    expect(idx.resolve("Projects/tsnotes")).toBe("Projects/tsnotes.md");
+    expect(idx.resolve("Projects/folio.md")).toBe("Projects/folio.md");
+    expect(idx.resolve("Projects/folio")).toBe("Projects/folio.md");
   });
 
   it("resolves a unique basename from anywhere", () => {
@@ -29,14 +29,14 @@ describe("VaultIndex.resolve", () => {
   it("prefers the linking note's own folder when a basename is ambiguous", () => {
     // This mirrors internal/markdown.ResolveWikilink on the server. If the two
     // disagreed, a link would render as broken and then resolve on save.
-    expect(idx.resolve("tsnotes", "Archive/y.md")).toBe("Archive/tsnotes.md");
-    expect(idx.resolve("tsnotes", "Projects/y.md")).toBe("Projects/tsnotes.md");
+    expect(idx.resolve("folio", "Archive/y.md")).toBe("Archive/folio.md");
+    expect(idx.resolve("folio", "Projects/y.md")).toBe("Projects/folio.md");
   });
 
   it("is deterministic when nothing else breaks the tie", () => {
-    const first = idx.resolve("tsnotes", "Elsewhere/y.md");
+    const first = idx.resolve("folio", "Elsewhere/y.md");
     for (let i = 0; i < 5; i++) {
-      expect(idx.resolve("tsnotes", "Elsewhere/y.md")).toBe(first);
+      expect(idx.resolve("folio", "Elsewhere/y.md")).toBe(first);
     }
   });
 
@@ -51,8 +51,8 @@ describe("VaultIndex.resolve", () => {
   });
 
   it("ignores whitespace and a leading slash", () => {
-    expect(idx.resolve("  Projects/tsnotes  ")).toBe("Projects/tsnotes.md");
-    expect(idx.resolve("/Projects/tsnotes")).toBe("Projects/tsnotes.md");
+    expect(idx.resolve("  Projects/folio  ")).toBe("Projects/folio.md");
+    expect(idx.resolve("/Projects/folio")).toBe("Projects/folio.md");
   });
 
   it("treats an empty target as dangling rather than throwing", () => {
@@ -61,7 +61,7 @@ describe("VaultIndex.resolve", () => {
   });
 
   it("matches case-insensitively, as Obsidian does", () => {
-    expect(idx.resolve("projects/TSNOTES")).toBe("Projects/tsnotes.md");
+    expect(idx.resolve("projects/FOLIO")).toBe("Projects/folio.md");
   });
 });
 

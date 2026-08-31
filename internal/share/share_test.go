@@ -7,9 +7,9 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/scottjab/tsnotes/internal/identity"
-	"github.com/scottjab/tsnotes/internal/share"
-	"github.com/scottjab/tsnotes/internal/store"
+	"github.com/scottjab/folio/internal/identity"
+	"github.com/scottjab/folio/internal/share"
+	"github.com/scottjab/folio/internal/store"
 )
 
 type env struct {

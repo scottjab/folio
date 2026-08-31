@@ -1,6 +1,6 @@
-// Package identity turns a tailnet connection into a tsnotes user.
+// Package identity turns a tailnet connection into a folio user.
 //
-// There are no passwords, sessions, or cookies anywhere in tsnotes. The tailnet
+// There are no passwords, sessions, or cookies anywhere in folio. The tailnet
 // already knows who is on the other end of the connection, so every request asks
 // tailscaled's WhoIs for the peer behind the source address and works from that.
 // This is the whole authentication story, which is why the failure modes here
@@ -17,8 +17,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/scottjab/tsnotes/internal/store"
-	"github.com/scottjab/tsnotes/internal/vaultpath"
+	"github.com/scottjab/folio/internal/store"
+	"github.com/scottjab/folio/internal/vaultpath"
 )
 
 var (
@@ -31,7 +31,7 @@ var (
 	ErrUnknownUser = errors.New("unknown user")
 )
 
-// WhoIs is the subset of tailscale's WhoIsResponse that tsnotes cares about.
+// WhoIs is the subset of tailscale's WhoIsResponse that folio cares about.
 //
 // Declaring our own keeps the tailscale dependency confined to internal/tsserve
 // and makes every test in this package run without a tailnet.
@@ -53,7 +53,7 @@ func (w WhoIs) IsTagged() bool { return len(w.Tags) > 0 }
 // WhoIsFunc resolves a remote address to a tailnet peer.
 type WhoIsFunc func(ctx context.Context, remoteAddr string) (WhoIs, error)
 
-// User is an authenticated tsnotes user and the vault they own.
+// User is an authenticated folio user and the vault they own.
 type User struct {
 	ID          int64
 	TailscaleID int64
@@ -373,7 +373,7 @@ func (r *Resolver) ByVaultID(ctx context.Context, vaultID int64) (User, error) {
 	}, nil
 }
 
-// Users lists everyone tsnotes has seen, which is what the share dialog offers
+// Users lists everyone folio has seen, which is what the share dialog offers
 // as autocomplete.
 func (r *Resolver) Users(ctx context.Context) ([]User, error) {
 	rows, err := r.db.All[userRow](ctx,
