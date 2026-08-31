@@ -42,6 +42,45 @@ const headingMarks = [
   "cm-fol-h1", "cm-fol-h2", "cm-fol-h3", "cm-fol-h4", "cm-fol-h5", "cm-fol-h6",
 ];
 
+/**
+ * The DOM for a rendered wikilink.
+ *
+ * Exported because table cells build their contents by hand rather than through
+ * decorations, and a link inside a table has to look and behave exactly like one
+ * in a paragraph.
+ */
+export function wikilinkElement(
+  label: string,
+  target: string,
+  anchor: string,
+  resolved: boolean,
+  handlers: LivePreviewHandlers,
+): HTMLAnchorElement {
+  const a = document.createElement("a");
+  a.className = "cm-fol-wikilink" + (resolved ? "" : " cm-fol-unresolved");
+  a.textContent = label;
+  a.title = resolved ? target : `${target} does not exist yet; click to create it`;
+  a.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    handlers.openLink(target, anchor);
+  });
+  return a;
+}
+
+/** The DOM for a rendered #tag pill. Shared with the table renderer. */
+export function tagElement(tag: string, handlers: LivePreviewHandlers): HTMLSpanElement {
+  const el = document.createElement("span");
+  el.className = "cm-fol-tag";
+  el.textContent = "#" + tag;
+  el.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    handlers.openTag(tag);
+  });
+  return el;
+}
+
 /** A rendered wikilink. Clicking it navigates; the text stays selectable. */
 class WikilinkWidget extends WidgetType {
   constructor(
@@ -64,18 +103,7 @@ class WikilinkWidget extends WidgetType {
   }
 
   toDOM() {
-    const a = document.createElement("a");
-    a.className = "cm-fol-wikilink" + (this.resolved ? "" : " cm-fol-unresolved");
-    a.textContent = this.label;
-    a.title = this.resolved
-      ? this.target
-      : `${this.target} does not exist yet; click to create it`;
-    a.addEventListener("mousedown", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      this.handlers.openLink(this.target, this.anchor);
-    });
-    return a;
+    return wikilinkElement(this.label, this.target, this.anchor, this.resolved, this.handlers);
   }
 
   ignoreEvent() {
@@ -94,15 +122,7 @@ class TagWidget extends WidgetType {
   }
 
   toDOM() {
-    const el = document.createElement("span");
-    el.className = "cm-fol-tag";
-    el.textContent = "#" + this.tag;
-    el.addEventListener("mousedown", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      this.handlers.openTag(this.tag);
-    });
-    return el;
+    return tagElement(this.tag, this.handlers);
   }
 
   ignoreEvent() {
@@ -244,7 +264,7 @@ function buildDecorations(view: EditorView, handlers: LivePreviewHandlers): Deco
       from,
       to,
       enter(node: SyntaxNodeRef) {
-        decorateNode(view, node, out, conceal, replaceWith, handlers);
+        return decorateNode(view, node, out, conceal, replaceWith, handlers);
       },
     });
   }
@@ -261,9 +281,15 @@ function decorateNode(
   conceal: (from: number, to: number) => void,
   replaceWith: (from: number, to: number, deco: Decoration) => void,
   handlers: LivePreviewHandlers,
-) {
+): boolean | void {
   const doc = view.state.doc;
   const name = node.name;
+
+  // A table is rendered whole, by the state field in table.ts, because a block
+  // decoration cannot come from a view plugin. Decorating its innards here would
+  // put two decorations over the same range, so the field owns tables outright
+  // and this walk stops at the boundary.
+  if (name === "Table") return false;
 
   // Headings: hide the hashes, scale the text. The line keeps its real content,
   // so backspacing at the start still deletes a "#".

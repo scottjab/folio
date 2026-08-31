@@ -559,6 +559,52 @@ button {
   vertical-align: middle;
 }
 
+/* Live preview: tables.
+ *
+ * The only block that is replaced wholesale rather than decorated in place, so
+ * this styles a real <table> instead of editor lines. Sans-serif and a notch
+ * smaller than the body: a table is data, and the serif the prose is set in
+ * makes columns of numbers harder to scan.
+ *
+ * white-space is reset because CodeMirror sets pre-wrap on the content, which a
+ * widget inherits and which would keep every run of spaces in a cell. */
+.cm-fol-table-wrap {
+  margin: 0.7em 0;
+  /* A table wider than the column scrolls on its own rather than pushing the
+     whole page sideways. */
+  overflow-x: auto;
+}
+.cm-fol-table {
+  border-collapse: collapse;
+  font-family: var(--font-ui);
+  font-size: 0.92em;
+  line-height: 1.5;
+  white-space: normal;
+}
+.cm-fol-table th,
+.cm-fol-table td {
+  padding: 0.35em 0.75em;
+  border: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+.cm-fol-table thead th {
+  background: var(--bg-sunken);
+  font-weight: 650;
+  white-space: nowrap;
+}
+/* Banding beats ruling for reading across a wide row, and it is subtle enough
+   that the borders still do the work on a short one. */
+.cm-fol-table tbody tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--bg-sunken) 55%, transparent);
+}
+/* These have to match the specificity of the th/td rule above to override its
+   text-align, and come after it to win the tie. */
+.cm-fol-table .cm-fol-al-left { text-align: left; }
+.cm-fol-table .cm-fol-al-center { text-align: center; }
+.cm-fol-table .cm-fol-al-right { text-align: right; }
+.cm-fol-table .cm-fol-table-img { max-height: 2.5em; vertical-align: middle; }
+
 /* Live preview: inline rendering */
 
 .cm-fol-strong { font-weight: 700; }

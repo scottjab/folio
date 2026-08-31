@@ -25,6 +25,7 @@ import { tags as t } from "@lezer/highlight";
 
 import { livePreview, LivePreviewHandlers } from "./livepreview";
 import { hashtagTag, folioMarkdown, wikilinkTag, wikilinkMarkTag } from "./markdown-ext";
+import { tableRendering } from "./table";
 
 /** The two ways to look at the same buffer. */
 export type Mode = "preview" | "source";
@@ -161,7 +162,7 @@ export class Editor {
       autocompletion({ override: [completions(this.opts)], closeOnBlur: true }),
       EditorView.lineWrapping,
       placeholder("Start writing. [[ links to a note, # adds a tag."),
-      this.modeCompartment.of(livePreview(this.opts)),
+      this.modeCompartment.of(this.preview()),
       EditorView.updateListener.of((u: ViewUpdate) => {
         if (u.docChanged && !this.silencing) {
           this.opts.onChange(u.state.doc.toString());
@@ -169,6 +170,16 @@ export class Editor {
       }),
       EditorView.theme({ "&": { height: "100%" } }),
     ];
+  }
+
+  /**
+   * Everything that renders markdown, as one extension.
+   *
+   * Two pieces, because a table has to replace whole lines and CodeMirror only
+   * accepts block decorations from a state field, never from a view plugin.
+   */
+  private preview(): Extension {
+    return [livePreview(this.opts), tableRendering(this.opts)];
   }
 
   /**
@@ -195,9 +206,7 @@ export class Editor {
     if (mode === this.mode) return;
     this.mode = mode;
     this.view.dispatch({
-      effects: this.modeCompartment.reconfigure(
-        mode === "preview" ? livePreview(this.opts) : [],
-      ),
+      effects: this.modeCompartment.reconfigure(mode === "preview" ? this.preview() : []),
     });
   }
 
