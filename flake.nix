@@ -10,6 +10,7 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
+        inherit (nixpkgs) lib;
         go = pkgs.go_1_27;
         buildGoModule = pkgs.buildGoModule.override { inherit go; };
 
@@ -93,104 +94,78 @@
           # part of buildGoModule's check phase.
           build = folio;
           inherit frontend;
+
+          # Instantiates the NixOS module for real. Without this nothing ever
+          # evaluates it, and a broken option type or an ExecStart that does not
+          # resolve would only surface on someone's machine at deploy time.
+          nixos-module = (nixpkgs.lib.nixosSystem {
+            inherit system;
+            modules = [
+              self.nixosModules.default
+              ({ lib, ... }: {
+                boot.loader.grub.enable = false;
+                fileSystems."/" = { device = "/dev/null"; fsType = "ext4"; };
+                system.stateVersion = "25.05";
+                nixpkgs.hostPlatform = system;
+
+                services.folio = {
+                  enable = true;
+                  hostname = "notes";
+                  authKeyFile = "/run/secrets/folio-authkey";
+                  agents = [{ tag = "tag:notes-agent"; actAs = "you@github"; }];
+                  settings.cacheTTL = "60s";
+                };
+              })
+            ];
+          }).config.system.build.toplevel;
+        }
+        # Boots a machine and starts the service. Evaluating the module proves
+        # the options are well formed; only running it proves the systemd
+        # hardening does not stop folio dead, which is the failure that would
+        # otherwise turn up on a real deploy.
+        // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+          nixos-vm = pkgs.testers.runNixOSTest {
+            name = "folio-service";
+
+            nodes.machine = { ... }: {
+              imports = [ self.nixosModules.default ];
+              services.folio = {
+                enable = true;
+                hostname = "notes";
+                logLevel = "debug";
+              };
+              virtualisation.memorySize = 2048;
+            };
+
+            testScript = ''
+              machine.wait_for_unit("folio.service")
+
+              # There is no tailnet in a test VM, so folio will not get past
+              # joining it. Reaching that point is the assertion: the binary ran
+              # under the sandbox, read its config, and found its state
+              # directory, which is everything the module is responsible for.
+              machine.wait_until_succeeds(
+                  "journalctl -u folio.service | grep -q 'connecting to the tailnet'"
+              )
+
+              # The state directory is folio's own, and private.
+              machine.succeed("test -d /var/lib/folio")
+              machine.succeed(
+                  "stat -c '%U:%G %a' /var/lib/folio | grep -qx 'folio:folio 700'"
+              )
+
+              # A seccomp filter that is too tight shows up as SIGSYS rather
+              # than as a clean error, so check for it specifically.
+              machine.fail("journalctl -u folio.service | grep -qiE 'bad system call|SIGSYS'")
+
+              # And it should not have died on a sandbox denial either.
+              machine.fail("journalctl -u folio.service | grep -qi 'permission denied'")
+            '';
+          };
         };
       })
     // {
-      nixosModules.default = { config, lib, pkgs, ... }:
-        let cfg = config.services.folio;
-        in {
-          options.services.folio = {
-            enable = lib.mkEnableOption "folio, a tailnet-native markdown notes app";
-
-            package = lib.mkOption {
-              type = lib.types.package;
-              default = self.packages.${pkgs.stdenv.hostPlatform.system}.default;
-              description = "The folio package to run.";
-            };
-
-            hostname = lib.mkOption {
-              type = lib.types.str;
-              default = "folio";
-              description = ''
-                Tailnet node name. The app is served at
-                https://<hostname>.<your-tailnet>.ts.net, which needs MagicDNS and
-                HTTPS certificates enabled for the tailnet.
-              '';
-            };
-
-            authKeyFile = lib.mkOption {
-              type = lib.types.nullOr lib.types.path;
-              default = null;
-              example = "/run/secrets/folio-authkey";
-              description = ''
-                File holding a Tailscale auth key, needed only on first run. It is
-                passed through systemd's LoadCredential so it never appears in the
-                unit's environment.
-              '';
-            };
-
-            settings = lib.mkOption {
-              type = lib.types.attrs;
-              default = { };
-              example = {
-                agents = [{ tag = "tag:notes-agent"; actAs = "you@github"; }];
-              };
-              description = "Contents of the JSON config file. See internal/config.";
-            };
-          };
-
-          config = lib.mkIf cfg.enable {
-            systemd.services.folio = {
-              description = "folio";
-              after = [ "network-online.target" ];
-              wants = [ "network-online.target" ];
-              wantedBy = [ "multi-user.target" ];
-
-              serviceConfig = {
-                ExecStart = lib.escapeShellArgs ([
-                  "${cfg.package}/bin/folio" "serve"
-                  "--hostname" cfg.hostname
-                  "--state" "/var/lib/folio"
-                ] ++ lib.optionals (cfg.settings != { }) [
-                  "--config" (pkgs.writers.writeJSON "folio.json" cfg.settings)
-                ]);
-
-                DynamicUser = true;
-                StateDirectory = "folio";
-                StateDirectoryMode = "0700";
-                Restart = "on-failure";
-                RestartSec = 5;
-
-                LoadCredential = lib.optional (cfg.authKeyFile != null)
-                  "ts_authkey:${cfg.authKeyFile}";
-
-                # folio reads and writes exactly one directory and talks to the
-                # tailnet. Nothing else needs to be reachable from it.
-                AmbientCapabilities = [ "CAP_NET_ADMIN" ];
-                CapabilityBoundingSet = [ "CAP_NET_ADMIN" ];
-                NoNewPrivileges = true;
-                PrivateDevices = true;
-                PrivateTmp = true;
-                ProtectClock = true;
-                ProtectControlGroups = true;
-                ProtectHome = true;
-                ProtectHostname = true;
-                ProtectKernelLogs = true;
-                ProtectKernelModules = true;
-                ProtectKernelTunables = true;
-                ProtectProc = "invisible";
-                ProtectSystem = "strict";
-                RestrictAddressFamilies = [ "AF_INET" "AF_INET6" "AF_UNIX" "AF_NETLINK" ];
-                RestrictNamespaces = true;
-                RestrictRealtime = true;
-                RestrictSUIDSGID = true;
-                SystemCallArchitectures = "native";
-                SystemCallFilter = [ "@system-service" "~@privileged" "~@resources" ];
-                LockPersonality = true;
-                MemoryDenyWriteExecute = true;
-              };
-            };
-          };
-        };
+      nixosModules.default = import ./nix/module.nix { inherit self; };
+      nixosModules.folio = self.nixosModules.default;
     };
 }

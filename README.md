@@ -85,7 +85,7 @@ immediately.
 Then open `https://folio.<your-tailnet>.ts.net`. The tailnet needs MagicDNS
 and HTTPS certificates enabled, both under DNS in the admin console.
 
-On NixOS:
+On NixOS, using the flake's module:
 
 ```nix
 {
@@ -93,13 +93,36 @@ On NixOS:
 
   # in your configuration
   imports = [ inputs.folio.nixosModules.default ];
+
   services.folio = {
     enable = true;
     hostname = "notes";
-    authKeyFile = "/run/secrets/folio-authkey";
+    authKeyFile = "/run/secrets/folio-authkey";   # first run only
+
+    # Let an agent on a tagged node act as you over MCP.
+    agents = [{ tag = "tag:notes-agent"; actAs = "you@github"; }];
   };
 }
 ```
+
+The module writes folio's JSON config file and passes it as the single argument
+to `folio serve`, so there is one place a setting comes from and no chance of
+flags and file disagreeing. `services.folio.settings` is the freeform escape
+hatch for anything without an option yet; folio rejects unknown keys, so a typo
+stops the service at startup naming the key rather than being ignored.
+
+Notes live in `/var/lib/folio/vaults`, owned by the `folio` user and group. The
+service runs as a static user rather than under `DynamicUser` on purpose: the
+whole point is that your notes are ordinary files you can back up or point a
+desktop Obsidian at, and a rotating uid under `/var/lib/private` makes that
+needlessly awkward. Add your own account to the `folio` group to read them
+directly.
+
+The unit is sandboxed hard: no capabilities at all (tsnet does its networking in
+userspace, with no TUN device), `ProtectSystem=strict` with the state directory
+as the only writable path, and a seccomp filter. `nix flake check` boots a VM and
+starts the service to prove none of that stops folio running, which is the
+failure that would otherwise only turn up on a real deploy.
 
 ## On disk
 
