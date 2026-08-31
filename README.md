@@ -42,7 +42,7 @@ use one of the commands that does both:
 
 ```sh
 nix build .#     # hermetic, into ./result/bin/folio
-make build       # bundles the app, then compiles, into ./folio
+make build       # bundles the app, then compiles, into ./bin/folio
 ```
 
 Plain `go build ./cmd/folio` compiles without the bundle. That binary still

@@ -6,8 +6,13 @@
 all: web build
 
 ## build: compile the binary with the frontend embedded
+# Output goes under bin/ rather than the repo root. A binary at the root is
+# named after the app, so it has to be listed in .gitignore by name, and a
+# rename then silently un-ignores the old one. Ignoring a directory does not
+# have that failure mode.
 build: embed
-	CGO_ENABLED=0 go build -ldflags "-s -w" -o folio ./cmd/folio
+	@mkdir -p bin
+	CGO_ENABLED=0 go build -ldflags "-s -w" -o bin/folio ./cmd/folio
 
 ## embed: copy the bundle into the package go:embed reads
 # Copies into dist/ rather than replacing it, so the tracked .gitkeep survives.
@@ -61,5 +66,5 @@ nix-hashes:
 LIB_FAKE = sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
 
 clean:
-	rm -rf folio result dev-state web/dist web/node_modules
+	rm -rf bin result dev-state web/dist web/node_modules
 	find internal/web/dist -mindepth 1 ! -name .gitkeep -delete

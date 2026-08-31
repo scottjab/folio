@@ -1,6 +1,11 @@
 # Build outputs.
-# `make build` writes ./folio; `nix build` symlinks ./result.
-/folio
+# `make build` writes ./bin/folio; `nix build` symlinks ./result.
+#
+# Ignoring the directory rather than the binary by name is deliberate: a binary
+# at the repo root has to be named here explicitly, and renaming the app then
+# un-ignores the old one, which is exactly how a 30MB artifact once ended up
+# staged.
+/bin/
 /result
 /result-*
 /web/dist/
