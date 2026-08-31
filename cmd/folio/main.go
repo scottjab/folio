@@ -45,6 +45,7 @@ var commands = []struct {
 }{
 	{"serve", "run the server on the tailnet", runServe},
 	{"dev", "run locally without a tailnet, for development", runDev},
+	{"tui", "browse and edit notes in the terminal", runTUI},
 	{"mcp", "bridge a stdio MCP client to a running folio", runMCP},
 	{"index", "rebuild or check the search index", runIndex},
 	{"doctor", "report on the state directory and the index", runDoctor},

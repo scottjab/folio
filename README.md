@@ -29,6 +29,11 @@ index included, is derived from them and can be thrown away and rebuilt.
 - **Obsidian on the desktop still works.** Point Obsidian at a vault directory.
   Edits there are noticed and reindexed within a second, and open browser tabs
   update live.
+- **A terminal client.** `folio tui` is a full client, not a viewer: search,
+  write, rename, delete, daily notes, backlinks, and sharing, over the same JSON
+  API the browser uses. It edits in place or hands the note to `$EDITOR`, saves
+  as a compare-and-swap like everything else, and updates live when a note
+  changes underneath it.
 - **MCP.** 19 tools, note resources, and three prompts, over Streamable HTTP at
   `/mcp` or through a stdio bridge. An agent acts as a specific tailnet user and
   sees exactly what that person sees.
@@ -171,6 +176,65 @@ folio index rebuild         # reconstruct the index from the files entirely
 None of these touch users, vaults, or shares, which is why `index rebuild` is
 the supported recovery path rather than deleting `folio.db`.
 
+## In the terminal
+
+```sh
+folio tui                                          # a local `folio dev`
+folio tui --server https://folio.your-tailnet.ts.net
+folio tui Projects/folio.md                        # open straight into a note
+```
+
+`FOLIO_SERVER` sets the default server, so you can leave the flag off. There is
+nothing to log in to: the TUI runs on your machine, so its requests arrive at
+the server from your tailnet address and WhoIs says who you are, exactly as the
+browser and the MCP bridge do.
+
+It is a client of a running folio rather than another way to open the state
+directory, so permissions, conflict handling, and link rewriting stay the
+server's business and there is no second implementation to keep in step. Every
+endpoint the browser uses has a method in `internal/client`.
+
+The screen is a note list, the note, and one line at the bottom that is either a
+message, a question, or the keys worth knowing right now. Below 62 columns the
+list and the note take turns, the way the web sidebar becomes a drawer on a
+phone.
+
+| | |
+|---|---|
+| `?` | every key, generated from the same table that dispatches them |
+| `/` or `Ctrl-K` | search every vault you can read |
+| `Tab` | move between the list and the note |
+| `Enter` | open the selected note, or start editing the open one |
+| `i` / `e` | edit here / hand the note to `$EDITOR` and save on exit |
+| `Ctrl-S` | save |
+| `p` | rendered markdown or raw |
+| `n` `m` `x` | new, rename, delete |
+| `a` | append a line, without opening the editor |
+| `D` | today's daily note |
+| `t` `f` `v` | filter by tag, by folder, switch vault |
+| `B` `L` | what links here, what this links to |
+| `s` `S` | shares in both directions, share this note |
+| `o` | open this note in a browser, which is how you see an attachment |
+| `Esc` | back: close an overlay, clear a filter, stop editing |
+| `M` | mouse on or off |
+
+The mouse works too. Click a note in the list to open it, click a `[[link]]` in
+a note to follow it, and use the wheel to move through the list or scroll the
+note; clicking away from an overlay closes it. Clicking an embedded `![[image]]`
+opens it in a browser, since a terminal cannot draw it. A terminal that is
+reporting mouse events cannot also be used to select text, so `M` hands the
+pointer back (most terminals also let you hold Shift to select regardless).
+
+Markdown is rendered in place: headings, emphasis, task boxes, tables, fenced
+code, wikilinks, and tags, wrapped to the pane. `p` switches to the raw text,
+which is also what the editor shows.
+
+There is no autosave, unlike the browser. Every write is a keypress you made,
+and every path that would lose a buffer, quitting or opening another note, stops
+and offers to save it first. A save is still a compare-and-swap: if the note
+changed underneath you, folio writes your version to a conflict file beside the
+original and the UI tells you where it went and offers to reload or overwrite.
+
 ## Connecting an agent
 
 Most MCP clients can point straight at the HTTP endpoint:
@@ -211,7 +275,9 @@ create one.
 rewriting the file. `edit_note` refuses an ambiguous match rather than guessing,
 and applies all of its edits or none.
 
-## Keyboard
+## Keyboard, in the browser
+
+The terminal client has its own keys, above.
 
 | | |
 |---|---|
@@ -243,7 +309,7 @@ nix flake check     # builds everything, runs the Go tests
 Layout:
 
 ```
-cmd/folio/        CLI: serve, dev, mcp, index, doctor, version
+cmd/folio/        CLI: serve, dev, tui, mcp, index, doctor, version
 internal/
   vaultpath/        every rule about what a vault path may look like
   markdown/         parse frontmatter, headings, wikilinks, tags, plaintext
@@ -257,6 +323,8 @@ internal/
   events/           typed in-process pub/sub
   httpapi/          JSON API, SSE, CSRF, the app shell
   mcpsrv/           MCP tools, resources, prompts
+  client/           Go client for the JSON API, including the event stream
+  tui/              the terminal client: model, key table, markdown renderer
   tsserve/          tsnet bootstrap; the only package that imports tailscale
 web/src/            CodeMirror 6 editor
   markdown-ext.ts     Lezer parsers for [[wikilinks]] and #tags
@@ -278,7 +346,20 @@ so it cannot tell a working stylesheet from a broken one; the invariant is
 checked against the source instead.
 
 The web API and the MCP server both go through `internal/notes`, so permissions,
-conflict handling, and link rewriting cannot drift between them.
+conflict handling, and link rewriting cannot drift between them. The terminal
+client sits a layer further out, on the JSON API itself, for the same reason:
+there is one implementation of what a note is, and three front ends that ask it.
+
+`internal/tui` is tested against a real server, not a mocked client: the test
+starts the actual SQLite store, vault, and HTTP handlers, then drives the model
+with keypresses and checks what reached the disk. The bugs a UI like this
+actually has all live at that seam, and a mock is exactly where they hide.
+
+Screen geometry lives in one place, `layout` in `internal/tui/mouse.go`, because
+drawing and hit-testing computing it separately is how a click ends up opening
+the note above the one you pointed at. The mouse tests click literal columns and
+rows counted off the drawn screen rather than asking the layout where things
+are: a hit test that agrees with the code it came from proves nothing.
 
 ## Go 1.27
 
