@@ -127,14 +127,29 @@
           nixos-vm = pkgs.testers.runNixOSTest {
             name = "folio-service";
 
-            nodes.machine = { ... }: {
-              imports = [ self.nixosModules.default ];
-              services.folio = {
-                enable = true;
-                hostname = "notes";
-                logLevel = "debug";
+            nodes = {
+              # The default: state under /var/lib/folio.
+              machine = { ... }: {
+                imports = [ self.nixosModules.default ];
+                services.folio = {
+                  enable = true;
+                  hostname = "notes";
+                  logLevel = "debug";
+                };
+                virtualisation.memorySize = 2048;
               };
-              virtualisation.memorySize = 2048;
+
+              # An overridden state directory, on a path whose parent does not
+              # exist either, so the module has to create the lot.
+              custom = { ... }: {
+                imports = [ self.nixosModules.default ];
+                services.folio = {
+                  enable = true;
+                  hostname = "notes";
+                  stateDir = "/srv/notes/folio-data";
+                };
+                virtualisation.memorySize = 2048;
+              };
             };
 
             testScript = ''

@@ -14,6 +14,11 @@ let
   # Explicit options first, then settings, so the freeform escape hatch wins.
   # folio parses its config with RejectUnknownMembers, so a typo here is a loud
   # failure at startup rather than a setting that quietly did nothing.
+  # ProtectHome hides /home from the unit entirely, so a state directory under
+  # it would be invisible no matter what ReadWritePaths says. Relax it in that
+  # one case rather than letting the service fail with a confusing error.
+  stateDirInHome = lib.hasPrefix "/home/" cfg.stateDir;
+
   configFile = format.generate "folio.json" (
     {
       inherit (cfg) hostname logLevel watchExternal;
@@ -64,6 +69,11 @@ in
         The markdown is the source of truth and is what you want in a backup. The
         database beside it can be rebuilt at any time with `folio index rebuild`,
         though the share grants it holds cannot, so back up the lot.
+
+        Any absolute path works. It is created on start with the right ownership,
+        including its parents, and is the only path the unit can write to. A
+        directory under `/home` also works, but relaxes `ProtectHome` for the
+        service, which the module will warn about.
       '';
     };
 
@@ -156,6 +166,20 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    # types.path already rejects a relative path, with a better message than an
+    # assertion here would give, so this only covers what it lets through.
+    assertions = [{
+      assertion = cfg.stateDir != "/";
+      message = "services.folio.stateDir must not be the filesystem root.";
+    }];
+
+    warnings = lib.optional stateDirInHome ''
+      services.folio.stateDir is ${cfg.stateDir}, which is under /home, so
+      ProtectHome has been turned off for the folio unit. That is a real
+      loosening of its sandbox. Somewhere like /var/lib/folio or /srv/folio
+      keeps the hardening intact.
+    '';
+
     users.users = lib.mkIf (cfg.user == "folio") {
       folio = {
         isSystemUser = true;
@@ -207,7 +231,7 @@ in
 
         ProtectSystem = "strict";
         ReadWritePaths = [ cfg.stateDir ];
-        ProtectHome = true;
+        ProtectHome = !stateDirInHome;
         PrivateTmp = true;
         PrivateDevices = true;
         ProtectClock = true;

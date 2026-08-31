@@ -111,7 +111,11 @@ flags and file disagreeing. `services.folio.settings` is the freeform escape
 hatch for anything without an option yet; folio rejects unknown keys, so a typo
 stops the service at startup naming the key rather than being ignored.
 
-Notes live in `/var/lib/folio/vaults`, owned by the `folio` user and group. The
+Notes live in `/var/lib/folio/vaults` by default, owned by the `folio` user and
+group. `services.folio.stateDir` moves that anywhere absolute; the directory and
+its parents are created on start with the right ownership, and it is the only
+path the unit is allowed to write to. A location under `/home` works too, but
+relaxes `ProtectHome` for the service, which the module warns about. The
 service runs as a static user rather than under `DynamicUser` on purpose: the
 whole point is that your notes are ordinary files you can back up or point a
 desktop Obsidian at, and a rotating uid under `/var/lib/private` makes that
