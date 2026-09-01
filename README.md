@@ -296,6 +296,17 @@ you, the save is refused, your version is written to
 `Note (conflict 2026-08-30T12-00-00Z).md` beside the original, and the editor
 tells you where it went. Nothing silently picks a winner, and nothing is lost.
 
+An open browser tab, or an open `folio tui`, follows the note it is showing. A
+change from anywhere, another tab, your phone, Obsidian, the terminal client, or
+an agent over MCP, arrives on the event stream and is loaded straight away when
+there is nothing local to lose. When there is, the editor says so and offers the
+new version rather than choosing for you.
+
+Whether a change is worth loading is decided by the content hash, not by who
+made it. The login on an event is your own whenever the other writer is you
+somewhere else, so treating "by me" as "already know about it" is how an edit
+made in one tab fails to show up in another.
+
 ## Development
 
 ```sh

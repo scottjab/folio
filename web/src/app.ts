@@ -25,6 +25,10 @@ export class App {
   private notes: NoteSummary[] = [];
   private tags: Array<{ tag: string; count: number }> = [];
   private unsubscribe: (() => void) | null = null;
+  // The note a save is in flight for. The server emits the change event as it
+  // writes, so that event can arrive before our own response does, and it must
+  // not be mistaken for somebody else editing underneath us.
+  private savingKey: string | null = null;
   private sidebarOpen = false;
   private width: Width = "full";
 
@@ -362,6 +366,7 @@ export class App {
     }
 
     this.setStatus("saving");
+    this.savingKey = noteKey(note.vault, note.path);
     try {
       const saved = await api.saveNote(note.vault, note.path, content, note.sha256);
       note.content = content;
@@ -383,35 +388,54 @@ export class App {
       }
       this.setStatus("error");
       this.showBanner(describe(err), "error");
+    } finally {
+      this.savingKey = null;
     }
   }
 
   // --- server events ---
 
   private onServerEvent(e: NoteEvent) {
-    // Our own saves come back here; ignoring them keeps the editor from
-    // reloading the content we just typed.
-    if (e.byLogin === this.me.login) {
-      void this.refreshIndex();
-      return;
-    }
     void this.refreshIndex();
 
     const note = this.current;
-    if (!note || e.vault !== note.vault || e.path !== note.path) return;
+    if (!note || e.vault !== note.vault) return;
+    // A move event names where the note went, so the note we have open is the
+    // one it came from.
+    if (e.path !== note.path && e.oldPath !== note.path) return;
+
+    // The echo of a save we are still waiting on. Its response is the
+    // authoritative answer, conflict included, so this event has nothing to add.
+    if (this.savingKey === noteKey(note.vault, note.path)) return;
+    // The echo of a save that has already landed.
     if (e.sha256 && e.sha256 === note.sha256) return;
 
-    if (this.autosave.pending || this.editor.content() !== note.content) {
+    // The login is not a useful test of whose change this is: it is your own
+    // whenever the other writer is you in another tab, on your phone, in the
+    // terminal client, or an agent acting as you over MCP. Only the hash can
+    // tell an echo from a change worth showing.
+
+    if (e.kind === "note.deleted") {
       this.showBanner(
-        "This note just changed on disk, and you have unsaved edits. Saving will create a conflict copy.",
+        "This note was deleted elsewhere. What is on screen is the last version you had.",
         "warn",
-        { label: "Load the new version", run: () => this.openNote(note.vault, note.path) },
       );
       return;
     }
-    // Nothing local to lose, so take the update silently. This is what makes an
-    // edit in Obsidian appear in an open tab.
-    void this.openNote(note.vault, note.path, true);
+
+    if (this.autosave.pending || this.editor.content() !== note.content) {
+      this.showBanner(
+        "This note just changed elsewhere, and you have unsaved edits. Saving will create a conflict copy.",
+        "warn",
+        { label: "Load the new version", run: () => this.openNote(e.vault, e.path) },
+      );
+      return;
+    }
+    // Nothing local to lose, so take the update. This is what makes an edit in
+    // Obsidian, in another tab, in the terminal client, or by an agent show up
+    // here without a refresh. A move changes the path, so the address bar
+    // follows it; a plain update leaves the history alone.
+    void this.openNote(e.vault, e.path, e.path === note.path);
   }
 
   // --- sidebar ---
@@ -671,6 +695,11 @@ function writeStored(key: string, value: string) {
 
 function describe(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+/** Names a note by the two things that identify one: its vault and its path. */
+function noteKey(vault: string, path: string): string {
+  return `${vault}\n${path}`;
 }
 
 /** A sensible default name for a new note: today's date under Notes/. */

@@ -44,9 +44,11 @@ function fakeFetch(overrides: Record<string, unknown> = {}) {
 
   return vi.fn(async (input: RequestInfo | URL) => {
     const url = new URL(String(input), "http://localhost");
-    const key = Object.keys(routes).find(
-      (k) => url.pathname === k || url.pathname.startsWith(k + "/"),
-    );
+    // Longest match wins, so /notes/Daily/x.md reaches the note rather than the
+    // /notes listing whose key is a prefix of it.
+    const key = Object.keys(routes)
+      .sort((a, b) => b.length - a.length)
+      .find((k) => url.pathname === k || url.pathname.startsWith(k + "/"));
     const body = key ? routes[key] : null;
 
     if (body === null) {
@@ -184,6 +186,143 @@ describe("App", () => {
     expect(root.classList.contains("app-error")).toBe(true);
     expect(root.textContent).toContain("could not start");
     expect(root.textContent).toContain("tailscaled");
+  });
+});
+
+describe("live updates", () => {
+  const notePath = "/api/vaults/me-example.com/notes/Daily/2026-08-31.md";
+
+  /** The event the server sends when a note is written. */
+  function changed(over: Record<string, unknown> = {}) {
+    return {
+      id: "01",
+      kind: "note.updated",
+      vault: note.vault,
+      path: note.path,
+      sha256: "def456",
+      // The same login as the viewer, which is the case that matters: the other
+      // writer is you in another tab, in the terminal client, or an agent.
+      byLogin: me.login,
+      at: "2026-08-31T00:01:00Z",
+      ...over,
+    };
+  }
+
+  const tick = () => new Promise((r) => setTimeout(r, 20));
+
+  /** The editor the app mounted, for simulating a draft nobody has saved. */
+  function editorOf(app: App) {
+    return (app as unknown as { editor: { setContent(s: string): void; content(): string } })
+      .editor;
+  }
+
+  beforeEach(() => {
+    document.body.innerHTML = '<div id="app" class="app is-loading"></div>';
+    vi.stubGlobal("EventSource", FakeEventSource);
+    FakeEventSource.instances = [];
+    history.replaceState(null, "", "/");
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    document.body.innerHTML = "";
+  });
+
+  it("reloads the open note when someone else writes it", async () => {
+    const updated = { ...note, content: "# Monday\n\nWritten from somewhere else.\n", sha256: "def456" };
+    vi.stubGlobal("fetch", fakeFetch({ [notePath]: updated }));
+
+    await startApp();
+    expect(document.querySelector(".cm-content")?.textContent).not.toContain("somewhere else");
+
+    FakeEventSource.instances[0].emit("note.updated", changed());
+    await tick();
+
+    expect(document.querySelector(".cm-content")?.textContent).toContain("somewhere else");
+    // Silently, with nothing to warn about: there was no local work to lose.
+    expect(document.querySelector(".banner:not(.hidden)")).toBeNull();
+  });
+
+  it("ignores the echo of a save it made itself", async () => {
+    const other = { ...note, content: "should not be loaded\n" };
+    vi.stubGlobal("fetch", fakeFetch({ [notePath]: other }));
+
+    await startApp();
+    // The hash the app already holds: nothing has changed underneath it.
+    FakeEventSource.instances[0].emit("note.updated", changed({ sha256: note.sha256 }));
+    await tick();
+
+    expect(document.querySelector(".cm-content")?.textContent).not.toContain("should not be loaded");
+  });
+
+  it("warns rather than overwriting a draft", async () => {
+    const updated = { ...note, content: "theirs\n", sha256: "def456" };
+    vi.stubGlobal("fetch", fakeFetch({ [notePath]: updated }));
+
+    const app = await startApp();
+    editorOf(app).setContent("my unsaved draft\n");
+
+    FakeEventSource.instances[0].emit("note.updated", changed());
+    await tick();
+
+    const banner = document.querySelector(".banner");
+    expect(banner?.className).toContain("banner-warn");
+    expect(banner?.textContent).toContain("unsaved edits");
+    // The draft is still there. Losing it silently is the failure this whole
+    // branch exists to prevent.
+    expect(editorOf(app).content()).toContain("my unsaved draft");
+
+    // And the offered way out loads their version.
+    banner!.querySelector<HTMLButtonElement>("button")!.click();
+    await tick();
+    expect(document.querySelector(".cm-content")?.textContent).toContain("theirs");
+  });
+
+  it("follows the open note when it is renamed elsewhere", async () => {
+    const moved = { ...note, path: "Daily/renamed.md", title: "Renamed", sha256: "def456" };
+    vi.stubGlobal(
+      "fetch",
+      fakeFetch({ "/api/vaults/me-example.com/notes/Daily/renamed.md": moved }),
+    );
+
+    await startApp();
+    FakeEventSource.instances[0].emit(
+      "note.moved",
+      changed({ kind: "note.moved", path: "Daily/renamed.md", oldPath: note.path }),
+    );
+    await tick();
+
+    expect(document.querySelector(".note-title")?.textContent).toBe("Renamed");
+    expect(window.location.pathname).toContain("Daily/renamed.md");
+  });
+
+  it("says so when the open note is deleted elsewhere", async () => {
+    vi.stubGlobal("fetch", fakeFetch());
+
+    await startApp();
+    FakeEventSource.instances[0].emit(
+      "note.deleted",
+      changed({ kind: "note.deleted", sha256: undefined }),
+    );
+    await tick();
+
+    const banner = document.querySelector(".banner");
+    expect(banner?.className).toContain("banner-warn");
+    expect(banner?.textContent).toContain("deleted");
+  });
+
+  it("leaves other notes alone", async () => {
+    const other = { ...note, content: "should not be loaded\n" };
+    vi.stubGlobal("fetch", fakeFetch({ [notePath]: other }));
+
+    await startApp();
+    FakeEventSource.instances[0].emit(
+      "note.updated",
+      changed({ path: "Projects/something-else.md" }),
+    );
+    await tick();
+
+    expect(document.querySelector(".cm-content")?.textContent).not.toContain("should not be loaded");
   });
 });
 
