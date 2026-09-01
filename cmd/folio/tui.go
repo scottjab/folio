@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/scottjab/folio/internal/client"
+	"github.com/scottjab/folio/internal/tsserve"
 	"github.com/scottjab/folio/internal/tui"
 )
 
@@ -24,12 +25,15 @@ func runTUI(ctx context.Context, args []string) error {
 		server = os.Getenv("FOLIO_SERVER")
 		editor string
 	)
-	fs.StringVar(&server, "server", server, "base URL of a running folio, for example https://folio.your-tailnet.ts.net")
+	fs.StringVar(&server, "server", server, "base URL of a running folio (default: the folio node on this tailnet)")
 	fs.StringVar(&editor, "editor", "", "editor the e key hands a note to (default $VISUAL, then $EDITOR)")
 	fs.Usage = func() {
 		fmt.Fprint(os.Stderr, "usage: folio tui [flags] [note]\n\n"+
 			"Opens folio in the terminal. With no note, it opens today's daily note.\n"+
 			"A note is a path in your own vault, or vault/path for someone else's.\n\n"+
+			"With no --server, it looks for the node named \"folio\" on this machine's\n"+
+			"tailnet, which is where `folio serve` puts it by default. Set FOLIO_SERVER\n"+
+			"to change that, or pass --server "+client.DevServer+" for a local `folio dev`.\n\n"+
 			"flags:\n")
 		fs.PrintDefaults()
 	}
@@ -41,7 +45,7 @@ func runTUI(ctx context.Context, args []string) error {
 	}
 
 	if server == "" {
-		server = client.DefaultServer
+		server = defaultServer(ctx)
 	}
 	cl, err := client.New(server, client.WithUserAgent("folio-tui/"+version))
 	if err != nil {
@@ -63,6 +67,30 @@ func runTUI(ctx context.Context, args []string) error {
 	})
 }
 
+// defaultHostname is the node name `folio serve` uses unless told otherwise, so
+// it is the one to look for when nobody says where the server is.
+const defaultHostname = "folio"
+
+// defaultServer works out where folio is: the node called "folio" on this
+// machine's tailnet.
+//
+// The full name matters rather than the short one. MagicDNS would resolve
+// "folio" through the search domain, but the TLS certificate is issued for
+// folio.<tailnet>.ts.net, so a request to https://folio fails to verify. Asking
+// the local tailscaled for the suffix is what turns the short name people think
+// in into a URL that actually connects.
+func defaultServer(ctx context.Context) string {
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	if suffix, err := tsserve.MagicDNSSuffix(ctx); err == nil {
+		return "https://" + defaultHostname + "." + suffix
+	}
+	// No tailnet to ask. Nothing is going to connect, so the point of this is
+	// the error message naming a URL the user recognises.
+	return client.DefaultServer
+}
+
 // preflight checks that the server is there and knows who we are.
 func preflight(ctx context.Context, cl *client.Client) error {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
@@ -82,7 +110,9 @@ func preflight(ctx context.Context, cl *client.Client) error {
 			"Try again in a moment.", cl.Server())
 	default:
 		return fmt.Errorf("cannot reach folio at %s: %w\n\n"+
-			"Pass --server, or set FOLIO_SERVER. For a local `folio dev`, %s is the default.",
-			cl.Server(), err, client.DefaultServer)
+			"That is the node named %q on this tailnet, which is where `folio serve` puts\n"+
+			"it by default. Pass --server or set FOLIO_SERVER if yours is elsewhere, or\n"+
+			"--server %s for a local `folio dev`.",
+			cl.Server(), err, defaultHostname, client.DevServer)
 	}
 }

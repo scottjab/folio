@@ -24,9 +24,14 @@ import (
 	"time"
 )
 
-// DefaultServer is where `folio dev` listens, which is the server most people
-// point the TUI at first.
-const DefaultServer = "http://127.0.0.1:8080"
+// DefaultServer is folio at its own default hostname on a tailnet. It is a
+// guess of last resort: a client that can reach tailscaled should ask it for the
+// tailnet's MagicDNS suffix and use the full name, since the TLS certificate is
+// issued for that and not for the short one.
+const DefaultServer = "https://folio"
+
+// DevServer is where `folio dev` listens.
+const DevServer = "http://127.0.0.1:8080"
 
 // maxErrorBody caps how much of a failed response we read looking for the JSON
 // error body. An HTML error page from a proxy in front of folio would otherwise

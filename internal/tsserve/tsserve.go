@@ -212,3 +212,25 @@ func Shutdown(srv *http.Server, grace time.Duration, log *slog.Logger) error {
 
 // StateDirFor keeps the tsnet state next to everything else in the state dir.
 func StateDirFor(stateDir string) string { return filepath.Join(stateDir, "tsnet") }
+
+// MagicDNSSuffix asks the tailscaled already running on this machine what its
+// tailnet's MagicDNS suffix is, for example "tail1234.ts.net".
+//
+// This is the client half of the package: it starts no node, it asks the daemon
+// the user is already running. It is how `folio tui` works out that a server
+// called "folio" lives at https://folio.<suffix> without being told. An error
+// means there is no tailnet to ask, which the caller should treat as "guess"
+// rather than as a failure.
+func MagicDNSSuffix(ctx context.Context) (string, error) {
+	var lc local.Client
+	// Without peers: this is a one-field question, and a large tailnet's full
+	// status is a lot of JSON to marshal for it.
+	st, err := lc.StatusWithoutPeers(ctx)
+	if err != nil {
+		return "", fmt.Errorf("asking tailscaled about this tailnet: %w", err)
+	}
+	if st.CurrentTailnet == nil || st.CurrentTailnet.MagicDNSSuffix == "" {
+		return "", errors.New("this machine is not on a tailnet, or MagicDNS is off")
+	}
+	return strings.Trim(st.CurrentTailnet.MagicDNSSuffix, "."), nil
+}

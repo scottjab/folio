@@ -179,15 +179,21 @@ the supported recovery path rather than deleting `folio.db`.
 ## In the terminal
 
 ```sh
-folio tui                                          # a local `folio dev`
-folio tui --server https://folio.your-tailnet.ts.net
-folio tui Projects/folio.md                        # open straight into a note
+folio tui                                   # the folio node on your tailnet
+folio tui Projects/folio.md                 # open straight into a note
+folio tui --server http://127.0.0.1:8080    # a local `folio dev`
 ```
 
-`FOLIO_SERVER` sets the default server, so you can leave the flag off. There is
-nothing to log in to: the TUI runs on your machine, so its requests arrive at
-the server from your tailnet address and WhoIs says who you are, exactly as the
-browser and the MCP bridge do.
+With no `--server` it goes to the node named `folio` on this machine's tailnet,
+which is where `folio serve` puts it. It asks the local tailscaled for the
+tailnet's MagicDNS suffix and uses the full name rather than the short one:
+MagicDNS would resolve `folio` through the search domain, but the certificate is
+issued for `folio.<tailnet>.ts.net`, so `https://folio` fails to verify.
+`FOLIO_SERVER` overrides the default, and `--server` overrides that.
+
+There is nothing to log in to: the TUI runs on your machine, so its requests
+arrive at the server from your tailnet address and WhoIs says who you are,
+exactly as the browser and the MCP bridge do.
 
 It is a client of a running folio rather than another way to open the state
 directory, so permissions, conflict handling, and link rewriting stay the
