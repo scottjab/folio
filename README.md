@@ -6,6 +6,9 @@ full MCP server so your agents can work on the same notes you do.
 Your notes are a directory of plain markdown files. Everything else, the search
 index included, is derived from them and can be thrown away and rebuilt.
 
+![The folio editor in a browser, showing a note in live preview with a rendered
+table, a tinted cursor line, and the backlinks bar](docs/web-editor.png)
+
 ## What it does
 
 - **Obsidian-style live preview.** One CodeMirror buffer holding raw markdown.
@@ -39,6 +42,12 @@ index included, is derived from them and can be thrown away and rebuilt.
   sees exactly what that person sees.
 - **One static binary.** Pure Go, `CGO_ENABLED=0`, web app embedded. Copy it to
   a machine and run it.
+
+Search is the same index from either client, `⌘K` in the browser and `/` in the
+terminal:
+
+![The search palette over the folio editor, matching four notes with the hit
+highlighted in each snippet](docs/web-search.png)
 
 ## Building
 
@@ -178,6 +187,9 @@ the supported recovery path rather than deleting `folio.db`.
 
 ## In the terminal
 
+![folio tui showing the note list on the left and a note rendered on the right,
+with the table drawn in box characters](docs/tui.png)
+
 ```sh
 folio tui                                   # the folio node on your tailnet
 folio tui Projects/folio.md                 # open straight into a note
@@ -223,6 +235,12 @@ phone.
 | `o` | open this note in a browser, which is how you see an attachment |
 | `Esc` | back: close an overlay, clear a filter, stop editing |
 | `M` | mouse on or off |
+
+`/` opens search over every vault you can read, with the same ranking and
+snippets the browser shows:
+
+![The folio tui search overlay, listing four matches with the query highlighted
+in each snippet](docs/tui-search.png)
 
 The mouse works too. Click a note in the list to open it, click a `[[link]]` in
 a note to follow it, and use the wheel to move through the list or scroll the
