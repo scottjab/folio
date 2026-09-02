@@ -393,3 +393,11 @@ The parts of the release this leans on, and where:
 | `httptest.NewTestServer` | API tests on an in-memory network |
 | `os.Root` | vault confinement enforced by the kernel, not by string checks |
 | `hash/maphash` | striped per-path write locks |
+
+## License
+
+AGPL-3.0. See [LICENSE](LICENSE).
+
+The short version: use it, change it, run it for yourself or your company, but
+if you run a modified folio as a service for other people, you have to publish
+your changes. If you want to use it commercially under different terms, ask me.
