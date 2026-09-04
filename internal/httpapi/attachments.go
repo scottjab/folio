@@ -7,6 +7,7 @@ import (
 	"path"
 	"strconv"
 
+	"github.com/scottjab/folio/internal/notes"
 	"github.com/scottjab/folio/internal/share"
 	"github.com/scottjab/folio/internal/vaultpath"
 )
@@ -98,4 +99,77 @@ func (a *API) handlePutAttachment(w http.ResponseWriter, r *http.Request) {
 		Size   int64  `json:"size"`
 		SHA256 string `json:"sha256"`
 	}{sc.Dir, n.Path, n.Size, n.SHA256})
+}
+
+// handleListAttachments reports the non-markdown files in a vault.
+//
+// The editor needs this to tell ![[diagram.png]] pointing at a real image from
+// one pointing at nothing. It cannot answer that from the note listing, and
+// guessing wrong means either a broken image icon on a good link or silence on
+// a bad one.
+func (a *API) handleListAttachments(w http.ResponseWriter, r *http.Request) {
+	sc, err := a.scope(r)
+	if err != nil {
+		a.fail(w, r, statusFor(err), err)
+		return
+	}
+	list, err := a.Notes.ListAttachments(r.Context(), sc)
+	if err != nil {
+		a.fail(w, r, statusFor(err), err)
+		return
+	}
+
+	type attachmentJSON struct {
+		Path string `json:"path"`
+		Size int64  `json:"size"`
+	}
+	out := make([]attachmentJSON, 0, len(list))
+	for _, at := range list {
+		out = append(out, attachmentJSON{at.Path, at.Size})
+	}
+	a.JSON(w, http.StatusOK, struct {
+		Vault       string           `json:"vault"`
+		Attachments []attachmentJSON `json:"attachments"`
+	}{sc.Dir, out})
+}
+
+// handleUpload stores a dropped or pasted file and says where it went.
+//
+// This is the endpoint the editors use, and it is deliberately not addressed by
+// path: the caller says which note it is inserting into and what the file was
+// called, and the server applies the user's attachment preference to decide the
+// rest. Letting each client compute the destination is how the browser and the
+// terminal would end up filing the same drop in two different folders.
+func (a *API) handleUpload(w http.ResponseWriter, r *http.Request) {
+	sc, err := a.scope(r)
+	if err != nil {
+		a.fail(w, r, statusFor(err), err)
+		return
+	}
+
+	content, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxAttachmentBytes))
+	if err != nil {
+		a.fail(w, r, http.StatusRequestEntityTooLarge, err)
+		return
+	}
+
+	at, err := a.Notes.Attach(r.Context(), sc, notes.Upload{
+		Note:        r.URL.Query().Get("note"),
+		Name:        r.URL.Query().Get("name"),
+		ContentType: r.Header.Get("Content-Type"),
+		Content:     content,
+	})
+	if err != nil {
+		a.fail(w, r, statusForPath(err), err)
+		return
+	}
+
+	w.Header().Set("ETag", strconv.Quote(at.SHA256))
+	a.JSON(w, http.StatusCreated, struct {
+		Vault  string `json:"vault"`
+		Path   string `json:"path"`
+		Size   int64  `json:"size"`
+		SHA256 string `json:"sha256"`
+		Link   string `json:"link"`
+	}{at.Vault, at.Path, at.Size, at.SHA256, at.Link})
 }

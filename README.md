@@ -22,6 +22,16 @@ table, a tinted cursor line, and the backlinks bar](docs/web-editor.png)
   Wide (grows with the window, stopping once lines get too long to track across),
   and Narrow (a classic reading measure). The choice is remembered. Below 860px
   the sidebar becomes a drawer, so it works on a phone.
+- **Obsidian's links, and its conventions.** `[[Note]]`, `[[Note#Heading]]`,
+  `[[Note|alias]]`, and `![[Note]]` to pull another note in where you are
+  standing. `[[` completes as you type and writes the shortest form that still
+  resolves, so links read as prose rather than as paths. A link to a note you
+  have not written yet is drawn as an invitation; clicking it creates the note.
+- **Attachments by drag, drop, or paste.** Drop a file on the editor or paste a
+  screenshot and it uploads, lands where your settings say, and links itself.
+  Sizing works too: `![[shot.png|300]]`. Where new attachments go is the same
+  setting Obsidian has, and it lives on the server, so the browser and the
+  terminal file things in the same place.
 - **Real full-text search.** SQLite FTS5 with BM25 ranking and highlighted
   snippets. `tag:go`, `path:Daily`, `"exact phrase"`, `prefix*`, `-exclusions`.
 - **Tailnet identity.** No passwords, no sessions, no cookies. folio asks
@@ -32,14 +42,17 @@ table, a tinted cursor line, and the backlinks bar](docs/web-editor.png)
 - **Obsidian on the desktop still works.** Point Obsidian at a vault directory.
   Edits there are noticed and reindexed within a second, and open browser tabs
   update live.
-- **A terminal client.** `folio tui` is a full client, not a viewer: search,
-  write, rename, delete, daily notes, backlinks, and sharing, over the same JSON
-  API the browser uses. It edits in place or hands the note to `$EDITOR`, saves
-  as a compare-and-swap like everything else, and updates live when a note
-  changes underneath it.
-- **MCP.** 19 tools, note resources, and three prompts, over Streamable HTTP at
-  `/mcp` or through a stdio bridge. An agent acts as a specific tailnet user and
-  sees exactly what that person sees.
+- **A terminal client, at parity.** `folio tui` is a full client, not a viewer:
+  search, write, rename, delete, daily notes, backlinks, sharing, `[[`
+  completion, attaching a file, and transclusion, over the same JSON API the
+  browser uses. It edits in place or hands the note to `$EDITOR`, saves as a
+  compare-and-swap like everything else, and updates live when a note changes
+  underneath it. Anything the browser learns, it learns.
+- **MCP, at parity too.** 24 tools, note resources, and three prompts, over
+  Streamable HTTP at `/mcp` or through a stdio bridge. An agent acts as a
+  specific tailnet user, sees exactly what that person sees, and can do what
+  they can do: attach a file, resolve a link, read the settings. It is a client,
+  not a reader.
 - **One static binary.** Pure Go, `CGO_ENABLED=0`, web app embedded. Copy it to
   a machine and run it.
 
@@ -173,6 +186,12 @@ Shipped the [[Projects/folio]] indexer. Still owe #go127 a writeup.
 The `id` is written once, when the note is created, and never rewritten. It is
 what lets a note keep its identity across a rename.
 
+`attachments/` is where uploads land by default. The other three of Obsidian's
+options are there too, in the browser's Settings and behind `,` in the terminal:
+the vault root, the note's own folder, or a named subfolder of it. The choice is
+stored per user on the server rather than in each client, because a drop in a
+browser tab and an `A` in a terminal have to agree about where a file goes.
+
 **The markdown is the source of truth.** The database is a cache. If it ever
 disagrees with the files, the files win:
 
@@ -228,11 +247,14 @@ phone.
 | `p` | rendered markdown or raw |
 | `n` `m` `x` | new, rename, delete |
 | `a` | append a line, without opening the editor |
+| `A` | attach a file, which uploads it and links it |
+| `[[` | while editing: complete a link from the whole vault |
+| `,` | settings: where new attachments go |
 | `D` | today's daily note |
 | `t` `f` `v` | filter by tag, by folder, switch vault |
 | `B` `L` | what links here, what this links to |
 | `s` `S` | shares in both directions, share this note |
-| `o` | open this note in a browser, which is how you see an attachment |
+| `o` | open this note in a browser, which is how you see an image |
 | `Esc` | back: close an overlay, clear a filter, stop editing |
 | `M` | mouse on or off |
 
@@ -252,6 +274,12 @@ pointer back (most terminals also let you hold Shift to select regardless).
 Markdown is rendered in place: headings, emphasis, task boxes, tables, fenced
 code, wikilinks, and tags, wrapped to the pane. `p` switches to the raw text,
 which is also what the editor shows.
+
+`![[Note]]` on a line of its own is expanded where it stands, drawn against a
+left rule so it reads as another note's text rather than as yours, and
+`![[Note#Heading]]` pulls in just that section. An embed of a picture is named
+rather than drawn, because a terminal cannot draw one; `o` opens the note in a
+browser that can.
 
 There is no autosave, unlike the browser. Every write is a keypress you made,
 and every path that would lose a buffer, quitting or opening another note, stops
@@ -293,11 +321,25 @@ create one.
 **Tools:** `search_notes`, `list_notes`, `read_note`, `create_note`,
 `update_note`, `edit_note`, `append_note`, `delete_note`, `move_note`,
 `get_backlinks`, `list_tags`, `list_folders`, `get_daily_note`, `list_vaults`,
-`vault_stats`, `list_shares`, `share_note`, `unshare_note`, `read_attachment`.
+`vault_stats`, `list_shares`, `share_note`, `unshare_note`, `read_attachment`,
+`list_attachments`, `attach_file`, `resolve_link`, `get_settings`,
+`set_settings`.
 
 `edit_note` and `append_note` exist so an agent can change one line without
 rewriting the file. `edit_note` refuses an ambiguous match rather than guessing,
 and applies all of its edits or none.
+
+`resolve_link` is the one worth knowing about. A link is not a path: `[[folio]]`
+resolves against the whole vault and prefers the linking note's own folder, so
+the same bare name means different notes in different places. An agent that
+guessed would be reimplementing the resolution rule, which is exactly what this
+codebase is arranged to prevent, so it asks instead and gets the same answer the
+editor and the indexer get, `#Heading` sections included.
+
+`attach_file` takes base64 and hands back the link to write. It does not take a
+path, because where an attachment goes is the user's setting rather than the
+caller's choice, and an agent filing things somewhere the browser would not is
+the whole failure this is built to avoid.
 
 ## Keyboard, in the browser
 
@@ -312,6 +354,32 @@ The terminal client has its own keys, above.
 | `Esc` | close the search palette, or the sidebar drawer |
 | `[[` | link to a note, with completion |
 | `#` | tag, with completion |
+| drop / paste | upload a file or a screenshot and link it |
+
+## Links and attachments
+
+Links are Obsidian's, including the resolution rule: an exact path first, then
+the same path with `.md`, then a unique basename, preferring one in the linking
+note's own folder and breaking a remaining tie by depth and then by name. That
+rule lives in `internal/markdown` and every client asks it rather than
+reimplementing it, which is what stops a link rendering as broken in the editor
+and then resolving in the index.
+
+Writing a link is the same rule run backwards. Completion inserts the shortest
+target that still finds the note, so you get `[[folio]]` and not
+`[[Projects/folio]]` unless the short form would land somewhere else.
+
+Dropping a file, pasting a screenshot, pressing `A` in the terminal, or an agent
+calling `attach_file` all reach one endpoint that applies your attachment setting, refuses to overwrite a name
+already in use (`IMG_0001.jpg` becomes `IMG_0001 1.jpg`), and hands back the link
+to write. A pasted image with no filename is named from the clock, the way
+Obsidian names one. Images embed with `![[...]]`; everything else links with
+`[[...]]`, because a PDF rendered into the middle of a paragraph helps nobody.
+
+`![[Note]]` renders the note in place, `![[Note#Heading]]` renders one section of
+it, and both stop rather than recursing when a note embeds itself. The browser
+renders an embed with the same editor the note itself uses, so a table inside an
+embed looks like a table.
 
 ## Concurrent edits
 

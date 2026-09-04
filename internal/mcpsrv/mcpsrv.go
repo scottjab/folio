@@ -99,6 +99,16 @@ When changing a note, prefer edit_note or append_note over update_note: they
 touch only what needs to change, which is cheaper and cannot accidentally drop
 the rest of the note. update_note accepts a baseSha for safe read-modify-write.
 
+A link is not a path. [[folio]] resolves against the whole vault, preferring the
+linking note's own folder, so the same bare name can mean different notes in
+different places. Use resolve_link rather than guessing: it answers with the same
+rule the editor and the index use, and it understands [[Note#Heading]] and
+![[Note]] embeds, returning the section or the note that would render there.
+
+To add a file, use attach_file and write the link it hands back. Do not invent a
+path for it: where attachments go is a setting this user chose, get_settings will
+tell you what it is, and the browser and terminal clients obey the same one.
+
 Other people's notes appear only when they have shared them with this user, and
 are read-only unless the share grants write.`
 

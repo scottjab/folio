@@ -139,3 +139,51 @@ type ListOptions struct {
 	Limit  int
 	Offset int
 }
+
+// AttachmentInfo is one file in a vault's listing, without its bytes.
+type AttachmentInfo struct {
+	Path string `json:"path"`
+	Size int64  `json:"size"`
+}
+
+// Upload is where the server filed an uploaded file.
+type Upload struct {
+	Vault  string `json:"vault"`
+	Path   string `json:"path"`
+	Size   int64  `json:"size"`
+	SHA256 string `json:"sha256"`
+	// Link is what to write inside [[ ]] to reference the file from the note it
+	// was uploaded for: the bare filename when that is unambiguous, the full
+	// path when it is not.
+	Link string `json:"link"`
+}
+
+// EmbedKind says what an ![[embed]] turned out to point at: "note",
+// "attachment", or "missing".
+type EmbedKind string
+
+const (
+	EmbedNote       EmbedKind = "note"
+	EmbedAttachment EmbedKind = "attachment"
+	EmbedMissing    EmbedKind = "missing"
+)
+
+// Embed is a resolved ![[target]].
+type Embed struct {
+	Kind      EmbedKind `json:"kind"`
+	Vault     string    `json:"vault"`
+	Path      string    `json:"path,omitzero"`
+	Title     string    `json:"title,omitzero"`
+	Anchor    string    `json:"anchor,omitzero"`
+	Content   string    `json:"content,omitzero"`
+	Truncated bool      `json:"truncated,omitzero"`
+}
+
+// Prefs is the settings a user carries between the browser and the terminal.
+type Prefs struct {
+	// AttachmentMode is "vault", "folder", "current", or "subfolder", by the
+	// same names Obsidian uses.
+	AttachmentMode string `json:"attachmentMode"`
+	// AttachmentFolder names the folder for the two modes that need one.
+	AttachmentFolder string `json:"attachmentFolder"`
+}

@@ -2,6 +2,7 @@ package mcpsrv_test
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json/v2"
 	"path/filepath"
 	"slices"
@@ -182,6 +183,7 @@ func TestToolsAreAdvertised(t *testing.T) {
 		"edit_note", "append_note", "delete_note", "move_note", "get_backlinks",
 		"list_tags", "list_folders", "get_daily_note", "list_vaults", "vault_stats",
 		"list_shares", "share_note", "unshare_note", "read_attachment",
+		"list_attachments", "attach_file", "resolve_link", "get_settings", "set_settings",
 	}
 	for _, w := range want {
 		if !slices.Contains(got, w) {
@@ -830,5 +832,265 @@ func TestServerInstructionsAreProvided(t *testing.T) {
 	}
 	if !strings.Contains(res.Instructions, "wikilink") {
 		t.Errorf("instructions = %q, want them to explain the linking convention", res.Instructions)
+	}
+}
+
+// --- attachments, links, and settings ---
+//
+// An agent is a first-class folio client, so everything a person can do in the
+// browser or the terminal has to be reachable here and has to produce the same
+// result on disk.
+
+const testPNG = "\x89PNG\r\n\x1a\n0123456789"
+
+func TestAttachFileObeysTheUsersSetting(t *testing.T) {
+	e := newEnv(t)
+	cs := e.connect(e.alice)
+	mustCall(t, cs, "create_note", map[string]any{"path": "Daily/Mon.md", "content": "# Mon\n"})
+
+	var got struct {
+		Path string `json:"path"`
+		Link string `json:"link"`
+		Size int64  `json:"size"`
+	}
+	call(t, cs, "attach_file", map[string]any{
+		"base64": base64.StdEncoding.EncodeToString([]byte(testPNG)),
+		"name":   "diagram.png",
+		"note":   "Daily/Mon.md",
+	}, &got)
+
+	// The default setting files everything in attachments/, and the link is the
+	// short form because the basename is unambiguous.
+	if got.Path != "attachments/diagram.png" {
+		t.Errorf("path = %q, want attachments/diagram.png", got.Path)
+	}
+	if got.Link != "diagram.png" {
+		t.Errorf("link = %q, want diagram.png", got.Link)
+	}
+	if got.Size != int64(len(testPNG)) {
+		t.Errorf("size = %d, want %d", got.Size, len(testPNG))
+	}
+
+	// The bytes round trip through the tool a model would read them with.
+	var back struct {
+		Base64   string `json:"base64"`
+		MimeType string `json:"mimeType"`
+	}
+	call(t, cs, "read_attachment", map[string]any{"path": got.Path}, &back)
+	raw, err := base64.StdEncoding.DecodeString(back.Base64)
+	if err != nil {
+		t.Fatalf("decoding what read_attachment returned: %v", err)
+	}
+	if string(raw) != testPNG {
+		t.Error("the bytes changed on the way through")
+	}
+	if back.MimeType != "image/png" {
+		t.Errorf("mimeType = %q, want image/png", back.MimeType)
+	}
+}
+
+func TestAttachFileWillNotOverwrite(t *testing.T) {
+	e := newEnv(t)
+	cs := e.connect(e.alice)
+	body := base64.StdEncoding.EncodeToString([]byte(testPNG))
+
+	var first, second struct {
+		Path string `json:"path"`
+	}
+	call(t, cs, "attach_file", map[string]any{"base64": body, "name": "shot.png"}, &first)
+	call(t, cs, "attach_file", map[string]any{"base64": body, "name": "shot.png"}, &second)
+
+	if first.Path != "attachments/shot.png" || second.Path != "attachments/shot 1.png" {
+		t.Errorf("paths = %q and %q, want attachments/shot.png and attachments/shot 1.png",
+			first.Path, second.Path)
+	}
+
+	var listed struct {
+		Attachments []struct {
+			Path string `json:"path"`
+		} `json:"attachments"`
+	}
+	call(t, cs, "list_attachments", map[string]any{}, &listed)
+	if len(listed.Attachments) != 2 {
+		t.Errorf("attachments = %+v, want both files", listed.Attachments)
+	}
+}
+
+func TestAttachFileRejectsWhatIsNotBase64(t *testing.T) {
+	e := newEnv(t)
+	cs := e.connect(e.alice)
+
+	// A model that sends prose instead of an encoded file should be told so,
+	// rather than having the prose written to disk as a PNG.
+	msg := callExpectingError(t, cs, "attach_file", map[string]any{
+		"base64": "this is not base64!!", "name": "x.png",
+	})
+	if !strings.Contains(msg, "base64") {
+		t.Errorf("error = %q, want it to mention base64", msg)
+	}
+}
+
+func TestAttachFileRefusesMarkdown(t *testing.T) {
+	e := newEnv(t)
+	cs := e.connect(e.alice)
+
+	msg := callExpectingError(t, cs, "attach_file", map[string]any{
+		"base64": base64.StdEncoding.EncodeToString([]byte("# hi\n")), "name": "notes.md",
+	})
+	if !strings.Contains(msg, "note") {
+		t.Errorf("error = %q, want it to point at the note tools", msg)
+	}
+}
+
+func TestResolveLinkAnswersLikeTheEditorDoes(t *testing.T) {
+	e := newEnv(t)
+	cs := e.connect(e.alice)
+	mustCall(t, cs, "create_note", map[string]any{
+		"path": "Meeting.md", "content": "# Meeting\n\n## Actions\n\n- ship it\n\n## Other\n\nNope.\n",
+	})
+	mustCall(t, cs, "create_note", map[string]any{"path": "Daily/Mon.md", "content": "# Mon\n"})
+
+	type resolved struct {
+		Kind    string `json:"kind"`
+		Path    string `json:"path"`
+		Anchor  string `json:"anchor"`
+		Content string `json:"content"`
+	}
+
+	// A bare name resolves against the whole vault, which is the thing an agent
+	// cannot work out from the path alone.
+	var whole resolved
+	call(t, cs, "resolve_link", map[string]any{"target": "Meeting", "from": "Daily/Mon.md"}, &whole)
+	if whole.Kind != "note" || whole.Path != "Meeting.md" {
+		t.Fatalf("resolve = %+v", whole)
+	}
+
+	// An anchor narrows to that section, by the same rule the two editors use.
+	var section resolved
+	call(t, cs, "resolve_link", map[string]any{"target": "Meeting#Actions"}, &section)
+	if section.Anchor != "Actions" {
+		t.Errorf("anchor = %q", section.Anchor)
+	}
+	if want := "## Actions\n\n- ship it\n\n"; section.Content != want {
+		t.Errorf("content = %q, want %q", section.Content, want)
+	}
+
+	// A model that pasted the whole link rather than its interior still gets an
+	// answer instead of a retry.
+	var pasted resolved
+	call(t, cs, "resolve_link", map[string]any{"target": "![[Meeting#Actions]]"}, &pasted)
+	if pasted.Content != section.Content {
+		t.Errorf("the bracketed form resolved differently: %+v", pasted)
+	}
+
+	// A link to a note nobody has written is normal, not an error.
+	var missing resolved
+	call(t, cs, "resolve_link", map[string]any{"target": "Nope"}, &missing)
+	if missing.Kind != "missing" {
+		t.Errorf("resolve of a dangling link = %+v", missing)
+	}
+}
+
+func TestResolveLinkFindsAnAttachment(t *testing.T) {
+	e := newEnv(t)
+	cs := e.connect(e.alice)
+	mustCall(t, cs, "attach_file", map[string]any{
+		"base64": base64.StdEncoding.EncodeToString([]byte(testPNG)), "name": "shot.png",
+	})
+
+	var got struct {
+		Kind    string `json:"kind"`
+		Path    string `json:"path"`
+		Content string `json:"content"`
+	}
+	call(t, cs, "resolve_link", map[string]any{"target": "shot.png"}, &got)
+	if got.Kind != "attachment" || got.Path != "attachments/shot.png" {
+		t.Errorf("resolve = %+v", got)
+	}
+	// Bytes come from read_attachment, not inlined into a text field.
+	if got.Content != "" {
+		t.Errorf("content = %q, want it empty for an attachment", got.Content)
+	}
+}
+
+func TestResolveLinkDoesNotLeakUnsharedNotes(t *testing.T) {
+	e := newEnv(t)
+	alice := e.connect(e.alice)
+	bob := e.connect(e.bob)
+
+	mustCall(t, alice, "create_note", map[string]any{"path": "Shared.md", "content": "# Shared\nvisible\n"})
+	mustCall(t, alice, "create_note", map[string]any{"path": "Private.md", "content": "# Private\nsecret\n"})
+	mustCall(t, alice, "share_note", map[string]any{
+		"path": "Shared.md", "grantee": "bob@github", "perm": "read",
+	})
+
+	var got struct {
+		Kind    string `json:"kind"`
+		Content string `json:"content"`
+	}
+	call(t, bob, "resolve_link", map[string]any{
+		"target": "Shared", "vault": "alice-github", "from": "Shared.md",
+	}, &got)
+	if got.Kind != "note" {
+		t.Fatalf("bob cannot resolve the note shared with him: %+v", got)
+	}
+
+	// A share covers one path. Anything outside it reports missing rather than
+	// forbidden, because "forbidden" confirms the note exists.
+	call(t, bob, "resolve_link", map[string]any{
+		"target": "Private", "vault": "alice-github", "from": "Shared.md",
+	}, &got)
+	if got.Kind != "missing" || strings.Contains(got.Content, "secret") {
+		t.Errorf("an unshared note leaked through resolve_link: %+v", got)
+	}
+}
+
+func TestSettingsRoundTripAndChangeWhereFilesLand(t *testing.T) {
+	e := newEnv(t)
+	cs := e.connect(e.alice)
+	mustCall(t, cs, "create_note", map[string]any{"path": "Daily/Mon.md", "content": "# Mon\n"})
+
+	type settings struct {
+		AttachmentMode   string `json:"attachmentMode"`
+		AttachmentFolder string `json:"attachmentFolder"`
+	}
+	var got settings
+	call(t, cs, "get_settings", map[string]any{}, &got)
+	if got.AttachmentMode != "folder" || got.AttachmentFolder != "attachments" {
+		t.Errorf("defaults = %+v", got)
+	}
+
+	// Switching to a mode with no folder must not lose the folder name, so
+	// switching back does not silently file things somewhere else.
+	call(t, cs, "set_settings", map[string]any{"attachmentMode": "current"}, &got)
+	if got.AttachmentMode != "current" || got.AttachmentFolder != "attachments" {
+		t.Errorf("after switching mode = %+v", got)
+	}
+
+	var up struct {
+		Path string `json:"path"`
+	}
+	call(t, cs, "attach_file", map[string]any{
+		"base64": base64.StdEncoding.EncodeToString([]byte(testPNG)),
+		"name":   "shot.png",
+		"note":   "Daily/Mon.md",
+	}, &up)
+	if up.Path != "Daily/shot.png" {
+		t.Errorf("path = %q, want Daily/shot.png", up.Path)
+	}
+}
+
+func TestSetSettingsRejectsAnUnusableFolder(t *testing.T) {
+	e := newEnv(t)
+	cs := e.connect(e.alice)
+
+	for _, args := range []map[string]any{
+		{"attachmentMode": "elsewhere"},
+		{"attachmentMode": "folder", "attachmentFolder": "../escape"},
+		{"attachmentMode": "folder", "attachmentFolder": ".hidden"},
+	} {
+		if msg := callExpectingError(t, cs, "set_settings", args); msg == "" {
+			t.Errorf("set_settings%v was accepted", args)
+		}
 	}
 }

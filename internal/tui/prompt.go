@@ -24,6 +24,8 @@ const (
 	prRevoke
 	prPerm
 	prSwitch
+	prAttach
+	prAttachFolder
 )
 
 type prompt struct {

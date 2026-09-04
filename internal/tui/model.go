@@ -110,6 +110,20 @@ type model struct {
 	// to select text.
 	mouse bool
 
+	// links is every path in the current vault, which is what turns a note's
+	// full path into the shortest link that still finds it.
+	links linkIndex
+
+	// prefs are the settings shared with the browser, currently just where an
+	// attachment is filed.
+	prefs client.Prefs
+
+	// embeds caches resolved ![[transclusions]] for the open note, and
+	// embedsInFlight stops a re-render asking for the same one again while the
+	// first request is still out.
+	embeds         map[embedKey]client.Embed
+	embedsInFlight map[embedKey]bool
+
 	// pendingShare holds the note being shared while the user picks a grantee.
 	pendingShare string
 	// startup is the note named on the command line, opened once identity is
@@ -162,14 +176,16 @@ func newModel(ctx context.Context, opts Options) *model {
 	}
 
 	m := &model{
-		ctx:    ctx,
-		cl:     opts.Client,
-		st:     st,
-		editor: editor,
-		ta:     ta,
-		vp:     viewport.New(80, 20),
-		label:  "Notes",
-		mouse:  true,
+		ctx:            ctx,
+		cl:             opts.Client,
+		st:             st,
+		editor:         editor,
+		ta:             ta,
+		vp:             viewport.New(80, 20),
+		label:          "Notes",
+		mouse:          true,
+		embeds:         map[embedKey]client.Embed{},
+		embedsInFlight: map[embedKey]bool{},
 	}
 	m.startup = opts.Note
 	// A sensible size before the terminal reports one, so the first frame is the
@@ -203,6 +219,39 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case noteMsg:
 		return m, m.onNote(msg)
+
+	case linkIndexMsg:
+		// A failure here costs the short form of a link, not the ability to
+		// write one, so it is not worth a status line.
+		if msg.err == nil {
+			m.links = linkIndex{vault: msg.vault, paths: msg.paths}
+		}
+		return m, nil
+
+	case prefsMsg:
+		if msg.err != nil {
+			if msg.saved {
+				return m, m.fail("save settings", msg.err)
+			}
+			return m, nil
+		}
+		m.prefs = msg.prefs
+		if msg.saved {
+			return m, m.setStatus("new attachments go "+describeAttachments(msg.prefs), false)
+		}
+		return m, nil
+
+	case attachedMsg:
+		return m, m.onAttached(msg)
+
+	case embedMsg:
+		delete(m.embedsInFlight, msg.key)
+		if msg.err != nil {
+			return m, nil // the embed stays unexpanded, which is the source text
+		}
+		m.embeds[msg.key] = msg.res
+		m.rerender()
+		return m, nil
 
 	case savedMsg:
 		return m, m.onSaved(msg)
@@ -397,7 +446,7 @@ func (m *model) renderBody() {
 		}
 		m.body = lines
 	} else {
-		r := renderer{st: m.st, width: max(8, m.notePaneWidth())}
+		r := renderer{st: m.st, width: max(8, m.notePaneWidth()), embed: m.lookupEmbed}
 		m.body = r.render(content)
 	}
 	m.vp.SetContent(strings.Join(m.body, "\n"))
@@ -419,7 +468,11 @@ func (m *model) onMe(msg meMsg) tea.Cmd {
 	startup := m.startup
 	m.startup = ""
 
-	cmds := []tea.Cmd{m.refreshList()}
+	cmds := []tea.Cmd{
+		m.refreshList(),
+		loadLinkIndex(m.ctx, m.cl, m.vault),
+		loadPrefs(m.ctx, m.cl),
+	}
 	switch {
 	case startup != "":
 		vault, path := m.vault, startup
@@ -465,7 +518,7 @@ func (m *model) onNote(msg noteMsg) tea.Cmd {
 		m.focus = paneNote
 		m.selectPath(msg.note.Vault, msg.note.Path)
 	}
-	return nil
+	return m.fetchEmbeds()
 }
 
 func (m *model) onSaved(msg savedMsg) tea.Cmd {
@@ -603,6 +656,18 @@ func (m *model) onEvent(msg eventMsg) tea.Cmd {
 
 	if e.Vault == m.query.vault {
 		cmds = append(cmds, m.refreshList())
+	}
+
+	// A note changing is the only thing that can make a resolved embed stale or
+	// a link's short form ambiguous, whether the change came from a browser,
+	// from Obsidian, or from an agent over MCP.
+	if e.Vault == m.links.vault || e.Vault == m.vault {
+		clear(m.embeds)
+		clear(m.embedsInFlight)
+		cmds = append(cmds, loadLinkIndex(m.ctx, m.cl, m.vault))
+		if m.hasNote {
+			cmds = append(cmds, m.fetchEmbeds())
+		}
 	}
 
 	if m.hasNote && e.Vault == m.note.Vault && (e.Path == m.note.Path || e.OldPath == m.note.Path) {

@@ -93,3 +93,90 @@ describe("path helpers", () => {
     }
   });
 });
+
+describe("VaultIndex.shortest", () => {
+  let idx: VaultIndex;
+
+  beforeEach(() => {
+    idx = new VaultIndex();
+    idx.replace(
+      ["Projects/folio.md", "Archive/folio.md", "Notes/unique.md"].map((path) => ({
+        vault: "me",
+        path,
+        title: basename(path),
+        tags: [],
+      })),
+      ["attachments/diagram.png", "Daily/shot.png", "attachments/shot.png"],
+    );
+  });
+
+  it("uses the bare name when it is unambiguous", () => {
+    // Obsidian's "shortest path when possible", which is what makes a vault of
+    // links readable instead of a wall of folder names.
+    expect(idx.shortest("Notes/unique.md")).toBe("unique");
+    expect(idx.shortest("attachments/diagram.png")).toBe("attachments/diagram.png".split("/")[1]);
+  });
+
+  it("falls back to the full path when the bare name would land elsewhere", () => {
+    // Two notes are called folio.md. The question is not "is the name unique"
+    // but "does the bare name resolve back to this note", because resolution
+    // breaks the tie deterministically. From an unrelated folder [[folio]] wins
+    // for Archive/folio.md, so that one keeps the short form and Projects does
+    // not: writing [[folio]] there would quietly point at the other note.
+    expect(idx.resolve("folio", "Elsewhere/y.md")).toBe("Archive/folio.md");
+    expect(idx.shortest("Archive/folio.md", "Elsewhere/y.md")).toBe("folio");
+    expect(idx.shortest("Projects/folio.md", "Elsewhere/y.md")).toBe("Projects/folio");
+
+    // Same rule for attachments, which keep their extension.
+    expect(idx.shortest("attachments/shot.png", "Elsewhere/y.md")).toBe("attachments/shot.png");
+    expect(idx.shortest("Daily/shot.png", "Elsewhere/y.md")).toBe("shot.png");
+  });
+
+  it("keeps the short form when the linking note's own folder decides it", () => {
+    // Resolution prefers the linking note's folder, so from Archive the bare
+    // name really does land on Archive/folio.md.
+    expect(idx.shortest("Archive/folio.md", "Archive/y.md")).toBe("folio");
+  });
+
+  it("drops .md from notes but keeps an attachment's extension", () => {
+    expect(idx.shortest("Notes/unique.md")).toBe("unique");
+    expect(idx.shortest("Daily/shot.png", "Daily/y.md")).toBe("shot.png");
+  });
+});
+
+describe("VaultIndex with attachments", () => {
+  it("resolves an embed written in its short form", () => {
+    // The bug this covers: attachments were never in the index, so
+    // ![[diagram.png]] dangled and the editor asked for a diagram.png at the
+    // vault root while the file sat in attachments/.
+    const idx = new VaultIndex();
+    idx.replace([{ vault: "me", path: "n.md", title: "n", tags: [] }], [
+      "attachments/diagram.png",
+    ]);
+    expect(idx.resolve("diagram.png")).toBe("attachments/diagram.png");
+    expect(idx.has("diagram.png")).toBe(true);
+  });
+
+  it("keeps attachments out of the note completions", () => {
+    const idx = new VaultIndex();
+    idx.replace([{ vault: "me", path: "n.md", title: "n", tags: [] }], ["a.png"]);
+    expect(idx.all().map((n) => n.path)).toEqual(["n.md"]);
+    expect(idx.attachments()).toEqual(["a.png"]);
+  });
+});
+
+describe("VaultIndex tie-breaking matches the server", () => {
+  it("orders by code unit, not by locale collation", () => {
+    // internal/markdown.ResolveWikilink breaks this tie with Go's byte
+    // comparison, where "Daily" sorts before "attachments" because 'D' is 68
+    // and 'a' is 97. localeCompare folds case and answers the other way, which
+    // would point the same [[shot.png]] at two different files depending on
+    // whether the editor or the indexer was asked.
+    const idx = new VaultIndex();
+    idx.replace([{ vault: "me", path: "n.md", title: "n", tags: [] }], [
+      "attachments/shot.png",
+      "Daily/shot.png",
+    ]);
+    expect(idx.resolve("shot.png", "Elsewhere/y.md")).toBe("Daily/shot.png");
+  });
+});

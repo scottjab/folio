@@ -25,6 +25,7 @@ internal/
   index/            indexer, FTS5 query translator, search, backlinks
   notes/            the operations layer both front ends share
   identity/         tailnet WhoIs to a folio user
+  prefs/            per-user settings both front ends obey
   share/            who may read or write what
   watch/            debouncer and fsnotify wiring for external edits
   events/           typed in-process pub/sub
@@ -54,10 +55,28 @@ CodeMirror's 1.2px black hairline. jsdom does not implement cascade specificity,
 so it cannot tell a working stylesheet from a broken one; the invariant is
 checked against the source instead.
 
+Where an attachment goes, what it is called, and what link to write for it are
+all decided in `internal/notes`, not in either editor. They look like client
+concerns and are not: a drop in the browser and an `A` in the terminal that
+disagree produce two different files on disk, and the only way two clients agree
+forever is to not have two implementations. The terminal client gets this for
+free twice over, because it is Go and can call `markdown.ResolveWikilink`
+directly; the browser has a second copy of the resolution rule in
+`vault-index.ts`, which is why the tie-break there is a byte comparison rather
+than `localeCompare`. ICU collation folds case and Go's does not, so the two
+disagreed about `Daily/` versus `attachments/` until they were made to match.
+
 The web API and the MCP server both go through `internal/notes`, so permissions,
 conflict handling, and link rewriting cannot drift between them. The terminal
 client sits a layer further out, on the JSON API itself, for the same reason:
 there is one implementation of what a note is, and three front ends that ask it.
+
+All three are clients, and none of them is a reader. A feature that lands in the
+browser lands in the terminal and in MCP, or there is a written reason why it
+cannot: an agent has no cursor to drop a file onto, so `attach_file` takes
+base64, and a terminal cannot draw a picture, so an embedded image is named
+rather than rendered. Anything else is the browser quietly becoming the real
+client and the other two decaying into viewers.
 
 `internal/tui` is tested against a real server, not a mocked client: the test
 starts the actual SQLite store, vault, and HTTP handlers, then drives the model

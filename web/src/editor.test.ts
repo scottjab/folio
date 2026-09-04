@@ -20,12 +20,14 @@ function mount(doc = "", handlers: Partial<LivePreviewHandlers> = {}) {
     parent,
     onChange: () => {},
     onSaveRequest: () => {},
-    completeNotes: () => [{ path: "Projects/folio.md", title: "folio" }],
+    completeNotes: () => [{ path: "Projects/folio.md", title: "folio", insert: "folio" }],
     completeTags: () => ["go", "daily"],
     openLink: () => {},
     openTag: () => {},
     isResolved: () => true,
     resolveEmbed: () => null,
+    // Nothing transcludes unless a test says so; "missing" is the quiet answer.
+    loadEmbed: async () => ({ kind: "missing" as const }),
     ...handlers,
   });
   mounted.push(editor);
@@ -213,11 +215,95 @@ describe("live preview rendering", () => {
     expect(img?.getAttribute("src")).toBe("/api/vaults/me/attachments/diagram.png");
   });
 
-  it("leaves an embed of a note as source", () => {
-    // resolveEmbed returning null means "not an image", and the source should
-    // stay visible rather than vanishing into an empty widget.
-    const { parent } = mount("intro\n\n![[Some Note]]\n", { resolveEmbed: () => null });
-    expect(parent.querySelector(".cm-fol-embed")).toBeNull();
-    expect(rendered(parent)).toContain("Some Note");
+  it("sizes an image embed from the alias, Obsidian style", () => {
+    const { parent } = mount("intro\n\n![[diagram.png|300x200]]\n", {
+      resolveEmbed: (t) => `/api/vaults/me/attachments/${t}`,
+    });
+    const img = parent.querySelector<HTMLImageElement>(".cm-fol-embed img")!;
+    expect(img.getAttribute("width")).toBe("300");
+    expect(img.getAttribute("height")).toBe("200");
+  });
+
+  it("treats a non-numeric alias as alt text, not a size", () => {
+    const { parent } = mount("intro\n\n![[diagram.png|a diagram]]\n", {
+      resolveEmbed: (t) => `/api/vaults/me/attachments/${t}`,
+    });
+    const img = parent.querySelector<HTMLImageElement>(".cm-fol-embed img")!;
+    expect(img.hasAttribute("width")).toBe(false);
+  });
+
+  it("transcludes an embedded note", async () => {
+    const { parent } = mount("intro\n\n![[Some Note]]\n", {
+      resolveEmbed: () => null, // not an image, so it is a note to transclude
+      loadEmbed: async () => ({
+        kind: "note" as const,
+        path: "Some Note.md",
+        title: "Some Note",
+        content: "# Heading\n\nEmbedded body.\n",
+      }),
+    });
+    await flush();
+
+    const block = parent.querySelector(".cm-fol-transclusion")!;
+    expect(block.querySelector(".cm-fol-transclusion-head")?.textContent).toBe("Some Note");
+    // The embedded text goes through the same renderer, so its heading is a
+    // rendered heading rather than a line starting with a hash.
+    expect(block.textContent).toContain("Embedded body.");
+    expect(block.querySelector(".cm-fol-h1")).not.toBeNull();
+  });
+
+  it("says so rather than expanding a note that embeds itself", async () => {
+    const { parent } = mount("intro\n\n![[Self]]\n", {
+      resolveEmbed: () => null,
+      // The embedded note embeds itself, which is the shape that would recurse.
+      loadEmbed: async () => ({
+        kind: "note" as const,
+        path: "Self.md",
+        content: "loop\n\n![[Self]]\n",
+      }),
+    });
+    await flush();
+
+    // The outer level expands, because Self.md is not on the stack until it
+    // does. The copy of the embed inside it is what has to stop.
+    expect(parent.textContent).toContain("loop");
+    expect(parent.textContent).toContain("embeds itself");
+  });
+
+  it("offers a link rather than nothing for an embedded file", async () => {
+    const { parent } = mount("intro\n\n![[report.pdf]]\n", {
+      resolveEmbed: () => null,
+      loadEmbed: async () => ({
+        kind: "attachment" as const,
+        path: "attachments/report.pdf",
+        href: "/api/vaults/me/attachments/attachments/report.pdf",
+      }),
+    });
+    await flush();
+
+    const chip = parent.querySelector<HTMLAnchorElement>(".cm-fol-file-chip")!;
+    expect(chip.getAttribute("href")).toBe("/api/vaults/me/attachments/attachments/report.pdf");
+  });
+
+  it("marks an embed of a note that does not exist", async () => {
+    const { parent } = mount("intro\n\n![[Nope]]\n", {
+      resolveEmbed: () => null,
+      loadEmbed: async () => ({ kind: "missing" as const }),
+    });
+    await flush();
+    expect(parent.querySelector(".cm-fol-transclusion-missing")?.textContent).toContain(
+      "does not exist yet",
+    );
   });
 });
+
+/**
+ * Lets the embed promises settle and the widgets repaint.
+ *
+ * A transclusion fills itself in from a promise, so asserting straight after
+ * mounting only ever sees the loading state.
+ */
+async function flush() {
+  for (let i = 0; i < 5; i++) await Promise.resolve();
+  await new Promise((r) => setTimeout(r, 0));
+}

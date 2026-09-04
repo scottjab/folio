@@ -5,6 +5,8 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+
+	"github.com/scottjab/folio/internal/client"
 )
 
 // renderer turns markdown into styled terminal lines.
@@ -23,7 +25,19 @@ import (
 type renderer struct {
 	st    *styles
 	width int
+
+	// embed resolves an ![[transclusion]] to what it points at. Nil means embeds
+	// are left as the source text, which is what a note being edited should show
+	// and what the tests that only care about markup want.
+	embed func(target string) (client.Embed, bool)
+	// depth is how many transclusions deep this renderer already is.
+	depth int
 }
+
+// maxEmbedDepth bounds nested transclusion. Deep enough for a note that pulls in
+// a section that pulls in a snippet, shallow enough that a note embedding itself
+// stops rather than filling the pane.
+const maxEmbedDepth = 3
 
 // render returns the display lines for a note's markdown, wrapped to the
 // renderer's width.
@@ -77,6 +91,15 @@ func (r renderer) render(md string) []string {
 		if rows, next, ok := r.table(lines, i); ok {
 			out = append(out, rows...)
 			i = next
+			continue
+		}
+
+		// A transclusion on a line of its own expands into the note it names.
+		// One sharing a line with prose stays inline, because a block cannot be
+		// spliced into the middle of a sentence.
+		if rows, ok := r.transclude(line); ok {
+			out = append(out, rows...)
+			i++
 			continue
 		}
 
@@ -682,4 +705,72 @@ func shrinkToFit(widths []int, budget int) {
 		widths[at]--
 		total--
 	}
+}
+
+// embedLine reports the target of an ![[embed]] that is alone on a line.
+//
+// Alone is the condition, not merely present: expanding an embed that sits in
+// the middle of a sentence would break the sentence around a block of someone
+// else's note.
+func embedLine(line string) (string, bool) {
+	t := strings.TrimSpace(line)
+	if !strings.HasPrefix(t, "![[") || !strings.HasSuffix(t, "]]") {
+		return "", false
+	}
+	inner := strings.TrimSpace(t[3 : len(t)-2])
+	if inner == "" || strings.Contains(inner, "[[") {
+		return "", false
+	}
+	// The alias slot is a display size for an image, never part of the target.
+	if p, _, ok := strings.Cut(inner, "|"); ok {
+		inner = strings.TrimSpace(p)
+	}
+	return inner, inner != ""
+}
+
+// transclude renders an embedded note in place, quoted so it reads as someone
+// else's text rather than as part of the note you are in.
+func (r renderer) transclude(line string) ([]string, bool) {
+	if r.embed == nil {
+		return nil, false
+	}
+	target, ok := embedLine(line)
+	if !ok {
+		return nil, false
+	}
+	res, ok := r.embed(target)
+	if !ok {
+		return nil, false // not resolved yet; leave the source visible
+	}
+
+	switch res.Kind {
+	case client.EmbedMissing:
+		return []string{r.st.muted.Render("│ " + target + " does not exist yet")}, true
+
+	case client.EmbedAttachment:
+		// A terminal cannot show a picture. Naming the file beats showing
+		// nothing, and `o` opens the note in a browser that can.
+		return []string{r.st.link.Render("│ 📎 " + res.Path)}, true
+	}
+
+	title := res.Title
+	if title == "" {
+		title = res.Path
+	}
+	out := []string{r.st.wikilink.Render("│ " + title)}
+
+	if r.depth >= maxEmbedDepth {
+		return append(out, r.st.muted.Render("│ (embedded too deeply to expand)")), true
+	}
+
+	// The same renderer, one level down and two columns narrower, so an embedded
+	// table or list looks exactly like it does in its own note.
+	inner := renderer{st: r.st, width: max(8, r.width-2), embed: r.embed, depth: r.depth + 1}
+	for _, l := range inner.render(res.Content) {
+		out = append(out, r.st.muted.Render("│ ")+l)
+	}
+	if res.Truncated {
+		out = append(out, r.st.muted.Render("│ (truncated; open the note to read the rest)"))
+	}
+	return out, true
 }

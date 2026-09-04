@@ -5,7 +5,18 @@
 // the whole app against a fake API, which is the only kind of test that catches
 // a failure to render at all.
 
-import { api, ApiError, ConflictError, Me, Note, NoteEvent, NoteSummary, subscribe } from "./api";
+import {
+  api,
+  ApiError,
+  ConflictError,
+  Me,
+  Note,
+  NoteEvent,
+  NoteSummary,
+  Prefs,
+  subscribe,
+} from "./api";
+import type { EmbedResult } from "./livepreview";
 import { Autosave } from "./autosave";
 import { Editor, Mode } from "./editor";
 import { Route, Router } from "./router";
@@ -31,6 +42,9 @@ export class App {
   private savingKey: string | null = null;
   private sidebarOpen = false;
   private width: Width = "full";
+  // Resolved embeds, keyed by vault, note, target and anchor. Cleared whenever
+  // the vault changes, which is the only thing that can invalidate one.
+  private embedCache = new Map<string, Promise<EmbedResult>>();
 
   private el = {
     root: document.getElementById("app") as HTMLElement,
@@ -116,6 +130,10 @@ export class App {
     const dailyBtn = h("button", { class: "ghost-btn", type: "button" }, "Today");
     dailyBtn.addEventListener("click", () => this.openDaily());
 
+    const settingsBtn = h("button", { class: "settings-btn", type: "button" }, "Settings");
+    settingsBtn.title = "Where new attachments go";
+    settingsBtn.addEventListener("click", () => void this.openSettings());
+
     this.el.noteList = div("note-list");
     this.el.tagList = div("tag-list");
 
@@ -127,7 +145,7 @@ export class App {
       this.el.noteList,
       h("h2", { class: "sidebar-heading" }, "Tags"),
       this.el.tagList,
-      div("sidebar-foot", h("span", { class: "muted" }, this.me.displayName || this.me.login)),
+      div("sidebar-foot", h("span", { class: "muted" }, this.me.displayName || this.me.login), settingsBtn),
     );
 
     const main = div("main");
@@ -211,7 +229,14 @@ export class App {
         }
       },
       onSaveRequest: () => this.autosave.flush(),
-      completeNotes: () => this.index.all().map((n) => ({ path: n.path, title: n.title })),
+      completeNotes: () =>
+        this.index.all().map((n) => ({
+          path: n.path,
+          title: n.title,
+          // Obsidian's "shortest path when possible": the bare name unless the
+          // vault holds two notes that would answer to it.
+          insert: this.index.shortest(n.path, this.current?.path ?? ""),
+        })),
       completeTags: () => this.index.tags(),
       openLink: (target, anchor) => this.followLink(target, anchor),
       openTag: (tag) => this.router.go({ kind: "tag", tag }),
@@ -221,7 +246,123 @@ export class App {
         if (!isImagePath(resolved)) return null;
         return api.attachmentURL(this.current?.vault ?? this.me.vault, resolved);
       },
+      loadEmbed: (target, anchor) => this.loadEmbed(target, anchor),
     });
+    this.setupDropAndPaste();
+  }
+
+  /**
+   * Resolves an ![[embed]] through the server, memoized per note.
+   *
+   * The cache matters more than it looks: a widget is rebuilt whenever the
+   * decoration set is, which is on every keystroke, so without it a note with
+   * three embeds would issue three requests per character typed. It is dropped
+   * whenever anything in the vault changes, which is the only event that can
+   * make an answer stale.
+   */
+  private loadEmbed(target: string, anchor: string): Promise<EmbedResult> {
+    const vault = this.current?.vault ?? this.me.vault;
+    const from = this.current?.path ?? "";
+    const key = [vault, from, target, anchor].join("\u0000");
+
+    const hit = this.embedCache.get(key);
+    if (hit) return hit;
+
+    const full = anchor ? `${target}#${anchor}` : target;
+    const pending = api
+      .embed(vault, from, full)
+      .then((e): EmbedResult => ({
+        kind: e.kind,
+        path: e.path,
+        title: e.title,
+        content: e.content,
+        truncated: e.truncated,
+        href: e.kind === "attachment" && e.path ? api.attachmentURL(vault, e.path) : undefined,
+      }))
+      .catch((err) => {
+        // A failed lookup must not be remembered, or a blip leaves the embed
+        // broken until the next vault change.
+        this.embedCache.delete(key);
+        throw err;
+      });
+
+    this.embedCache.set(key, pending);
+    return pending;
+  }
+
+  /**
+   * Drop a file on the editor, or paste one, and it is uploaded and linked.
+   *
+   * Both land on the same path deliberately: a screenshot pasted from the
+   * clipboard and the same file dragged out of a folder should end up in the
+   * same place with the same kind of link.
+   */
+  private setupDropAndPaste() {
+    const host = this.el.editorHost;
+
+    // Without preventing dragover the browser refuses the drop, and without the
+    // class there is nothing telling you the editor will take it.
+    host.addEventListener("dragover", (e) => {
+      if (!e.dataTransfer?.types.includes("Files")) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+      host.classList.add("is-dropping");
+    });
+    host.addEventListener("dragleave", (e) => {
+      if (e.target === host) host.classList.remove("is-dropping");
+    });
+    host.addEventListener("drop", (e) => {
+      const files = [...(e.dataTransfer?.files ?? [])];
+      host.classList.remove("is-dropping");
+      if (files.length === 0) return;
+      e.preventDefault();
+      void this.uploadFiles(files);
+    });
+
+    host.addEventListener("paste", (e) => {
+      const items = [...(e.clipboardData?.items ?? [])].filter((i) => i.kind === "file");
+      if (items.length === 0) return; // ordinary text; let CodeMirror have it
+      const files = items.map((i) => i.getAsFile()).filter((f): f is File => f !== null);
+      if (files.length === 0) return;
+      e.preventDefault();
+      // A clipboard image has no name worth keeping ("image.png" every time), so
+      // the server names it from the clock the way Obsidian does. A file copied
+      // in a file manager does have one, and keeps it.
+      void this.uploadFiles(files, { keepNames: false });
+    });
+  }
+
+  private async uploadFiles(files: File[], opts: { keepNames?: boolean } = {}) {
+    const note = this.current;
+    if (!note) {
+      this.showBanner("Open a note before adding a file to it.", "warn");
+      return;
+    }
+    if (note.perm === "read") {
+      this.showBanner("This note is read only, so its vault will not take uploads.", "warn");
+      return;
+    }
+    const keepNames = opts.keepNames ?? true;
+
+    this.setStatus("uploading");
+    try {
+      for (const file of files) {
+        const up = await api.upload(note.vault, note.path, keepNames ? file.name : "", file);
+        // An image embeds; anything else is a link, because a rendered PDF in
+        // the middle of a paragraph is not what a reader wants.
+        const bang = isImagePath(up.path) ? "!" : "";
+        this.editor.insertAtCursor(`${bang}[[${up.link}]]`);
+      }
+      // The new file has to be in the index before the embed we just wrote can
+      // resolve, or it renders as missing until the next refresh.
+      this.embedCache.clear();
+      await this.refreshIndex();
+      this.setStatus("unsaved");
+      this.autosave.schedule();
+    } catch (err) {
+      this.setStatus("saved");
+      this.showBanner(describe(err), "error");
+    }
   }
 
   private setupKeys() {
@@ -396,6 +537,9 @@ export class App {
   // --- server events ---
 
   private onServerEvent(e: NoteEvent) {
+    // A note changing is the only thing that can make a resolved embed stale,
+    // whether it was edited here, in Obsidian, or by an agent.
+    this.embedCache.clear();
     void this.refreshIndex();
 
     const note = this.current;
@@ -442,11 +586,25 @@ export class App {
 
   private async refreshIndex() {
     try {
-      const [notes, tags] = await Promise.all([api.listNotes(this.me.vault), api.tags()]);
+      const [notes, tags, files] = await Promise.all([
+        api.listNotes(this.me.vault),
+        api.tags(),
+        // Attachments belong in the index because ![[diagram.png]] resolves by
+        // the same rule [[Some Note]] does. Without them the short form of an
+        // embed dangles and the editor asks for a file at the vault root.
+        //
+        // Both listings are of your own vault, so the index describes exactly
+        // one. A shared note open from someone else's vault therefore resolves
+        // its embeds through the server instead, which is the correct answer
+        // rather than a fast one: an index holding half of two vaults would
+        // point a link at a file that is not the one the indexer means.
+        api.listAttachments(this.me.vault).catch(() => [] as Array<{ path: string }>),
+      ]);
       this.notes = notes;
       this.tags = tags;
       this.index.replace(
         notes.map((n) => ({ vault: n.vault, path: n.path, title: n.title, tags: n.tags })),
+        files.map((f) => f.path),
       );
       this.renderNoteList(notes, "Notes");
       this.renderTagList();
@@ -511,6 +669,89 @@ export class App {
     }
     inner.append(list);
     box.append(inner);
+  }
+
+  // --- settings ---
+
+  /**
+   * The settings sheet. Only what both clients share lives here: the attachment
+   * folder is a server-side preference because a drop in the browser and an
+   * attach in the terminal have to file things in the same place, while the
+   * text width stays in this browser's localStorage where it belongs.
+   */
+  private async openSettings() {
+    let current: Prefs;
+    try {
+      current = await api.prefs();
+    } catch (err) {
+      this.showBanner(describe(err), "error");
+      return;
+    }
+
+    const overlay = div("palette-overlay");
+    const box = div("settings");
+    const close = () => overlay.remove();
+    overlay.addEventListener("mousedown", (e) => {
+      if (e.target === overlay) close();
+    });
+
+    box.append(h("h2", {}, "Settings"));
+    box.append(h("p", { class: "muted" }, "Where new attachments go, by Obsidian's four options."));
+
+    const select = h("select", { class: "settings-select" }) as HTMLSelectElement;
+    for (const [value, label] of MODES) {
+      const opt = h("option", { value }, label) as HTMLOptionElement;
+      opt.selected = current.attachmentMode === value;
+      select.append(opt);
+    }
+
+    const folder = h("input", {
+      class: "settings-input",
+      type: "text",
+      placeholder: "attachments",
+    }) as HTMLInputElement;
+    folder.value = current.attachmentFolder;
+
+    const folderRow = div("settings-row", h("label", {}, "Folder"), folder);
+    // Two of the four modes have no folder to name, so hiding the field is the
+    // difference between a setting and a puzzle.
+    const syncFolderRow = () => {
+      folderRow.hidden = select.value === "vault" || select.value === "current";
+    };
+    select.addEventListener("change", syncFolderRow);
+    syncFolderRow();
+
+    const status = h("p", { class: "settings-status muted" }, "");
+    const save = h("button", { class: "new-btn", type: "button" }, "Save");
+    save.addEventListener("click", async () => {
+      status.textContent = "";
+      try {
+        await api.setPrefs({
+          attachmentMode: select.value,
+          attachmentFolder: folder.value.trim(),
+        });
+        close();
+      } catch (err) {
+        // The server validates the folder, so this is where a path that would
+        // escape the vault or never be served comes back.
+        status.textContent = describe(err);
+        status.className = "settings-status error-text";
+      }
+    });
+
+    box.append(
+      div("settings-row", h("label", {}, "New attachments"), select),
+      folderRow,
+      status,
+      div("settings-actions", save),
+    );
+    overlay.append(box);
+    document.body.append(overlay);
+    select.focus();
+
+    overlay.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") close();
+    });
   }
 
   // --- search palette ---
@@ -603,7 +844,9 @@ export class App {
     this.el.modeToggle.classList.toggle("is-source", next === "source");
   }
 
-  private setStatus(state: "saved" | "saving" | "unsaved" | "error" | "conflict" | "read only") {
+  private setStatus(
+    state: "saved" | "saving" | "unsaved" | "error" | "conflict" | "read only" | "uploading",
+  ) {
     this.el.status.textContent = state;
     this.el.status.className = `note-status status-${state.replace(" ", "-")}`;
   }
@@ -708,3 +951,14 @@ function suggestName(): string {
   const stamp = now.toISOString().slice(0, 10);
   return `Notes/${stamp}.md`;
 }
+
+/**
+ * The attachment-folder modes, by the names Obsidian gives them in its own
+ * settings, so a vault open in both can be made to agree.
+ */
+const MODES: Array<[string, string]> = [
+  ["folder", "In one folder"],
+  ["vault", "In the vault root"],
+  ["current", "Beside the note"],
+  ["subfolder", "In a subfolder beside the note"],
+];

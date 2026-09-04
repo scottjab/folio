@@ -28,6 +28,10 @@ const (
 	pickShare
 	pickUser
 	pickHelp
+	// pickComplete is the `[[` link completion, and is the only picker that
+	// appears while editing rather than instead of it.
+	pickComplete
+	pickSetting
 )
 
 // pickItem is one row. Only the fields the kind cares about are set.
@@ -92,6 +96,9 @@ func newPicker(kind pickerKind, title string) *picker {
 	case pickBacklink, pickLink:
 		p.twoLine = true
 		p.hint = "enter open · esc close"
+	case pickComplete, pickSetting:
+		p.twoLine = true
+		p.hint = "enter insert · esc cancel"
 	case pickHelp:
 		p.hint = "esc close"
 		p.detailRight = false

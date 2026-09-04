@@ -9,3 +9,5 @@ var errMarkdownViaAttachments = errors.New("markdown files must be written throu
 // errNoFlush means the response writer cannot stream, which server-sent events
 // require.
 var errNoFlush = errors.New("streaming is not supported by this connection")
+
+var errNoEmbedTarget = errors.New("an embed needs a target")

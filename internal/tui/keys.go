@@ -199,6 +199,10 @@ func allBindings() []binding {
 			run: func(m *model) tea.Cmd { return m.guard(loadDaily(m.ctx, m.cl, m.vault)) },
 		},
 		{
+			keys: []string{"A"}, label: "A", desc: "attach a file to this note", group: gNote,
+			run: func(m *model) tea.Cmd { return m.startAttach() },
+		},
+		{
 			keys: []string{"o"}, label: "o", desc: "open this note in a browser", group: gNote,
 			run: func(m *model) tea.Cmd {
 				it, ok := m.target()
@@ -291,6 +295,10 @@ func allBindings() []binding {
 			},
 		},
 		{
+			keys: []string{","}, label: ",", desc: "settings: where attachments go", group: gApp,
+			run: func(m *model) tea.Cmd { return m.showSettings() },
+		},
+		{
 			keys: []string{"?"}, label: "?", desc: "this help", group: gApp,
 			run: func(m *model) tea.Cmd { return m.showHelp() },
 		},
@@ -342,6 +350,13 @@ func (m *model) editKey(msg tea.KeyMsg, key string) tea.Cmd {
 	var cmd tea.Cmd
 	m.ta, cmd = m.ta.Update(msg)
 	m.dirty = m.ta.Value() != m.note.Content
+
+	// Typing the second bracket is what opens completion, which is the habit
+	// anyone arriving from Obsidian already has. Only a literal "[" does it, so
+	// arrowing back over an existing "[[" does not reopen the list.
+	if key == "[" && m.justTypedOpenBracket() {
+		return tea.Batch(cmd, m.startComplete())
+	}
 	return cmd
 }
 
@@ -443,6 +458,12 @@ func (m *model) submitPrompt() tea.Cmd {
 		return moveNote(m.ctx, m.cl, p.vault, p.path, vaultpath.EnsureMarkdown(value))
 	case prAppend:
 		return appendNote(m.ctx, m.cl, p.vault, p.path, value, "")
+	case prAttach:
+		return uploadFile(m.ctx, m.cl, p.vault, p.path, value)
+	case prAttachFolder:
+		next := m.prefs
+		next.AttachmentMode, next.AttachmentFolder = p.text, value
+		return savePrefs(m.ctx, m.cl, next)
 	}
 	return nil
 }
@@ -577,6 +598,12 @@ func (m *model) activate() tea.Cmd {
 		pr.path, pr.text = path, it.text
 		m.pr = pr
 		return nil
+
+	case pickComplete:
+		return m.insertCompletion(it.text)
+
+	case pickSetting:
+		return m.chooseAttachmentMode(it.text)
 
 	case pickHelp:
 		m.closePicker()

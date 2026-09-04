@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -1093,4 +1094,421 @@ func TestRequestsStillWorkBeforeClose(t *testing.T) {
 	resp := alice.do("GET", "/api/me", nil)
 	wantStatus(t, resp, 200)
 	resp.Body.Close()
+}
+
+// --- uploads and preferences ---
+
+// upload posts bytes to the endpoint the editors use and returns the decoded
+// reply. It is a raw request rather than client.do because the body is a file,
+// not JSON.
+func (c *client) upload(query, contentType, body string) (uploadReply, *http.Response) {
+	c.h.t.Helper()
+	req, err := http.NewRequest("POST", c.h.srv.URL+"/api/vaults/me/upload?"+query, strings.NewReader(body))
+	if err != nil {
+		c.h.t.Fatalf("NewRequest: %v", err)
+	}
+	req.Header.Set("Sec-Fetch-Site", "same-origin")
+	req.Header.Set("X-Test-Peer", c.ip)
+	req.Header.Set("Content-Type", contentType)
+
+	resp, err := c.h.srv.Client().Do(req)
+	if err != nil {
+		c.h.t.Fatalf("upload: %v", err)
+	}
+	var out uploadReply
+	if resp.StatusCode == http.StatusCreated {
+		decodeInto(c.h.t, resp, &out)
+	}
+	return out, resp
+}
+
+type uploadReply struct {
+	Vault string `json:"vault"`
+	Path  string `json:"path"`
+	Size  int64  `json:"size"`
+	Link  string `json:"link"`
+}
+
+const testPNG = "\x89PNG\r\n\x1a\n0123456789"
+
+func TestUploadUsesTheDefaultAttachmentFolder(t *testing.T) {
+	h := newHarness(t)
+	alice := h.as("100.64.0.1", aliceWho)
+	alice.do("POST", "/api/vaults/me/notes", map[string]any{"path": "Daily/x.md", "content": "# x\n"}).Body.Close()
+
+	got, resp := alice.upload("note=Daily/x.md&name=diagram.png", "image/png", testPNG)
+	wantStatus(t, resp, http.StatusCreated)
+
+	if got.Path != "attachments/diagram.png" {
+		t.Errorf("path = %q, want attachments/diagram.png", got.Path)
+	}
+	// The basename is unique in the vault, so the link is the short form, which
+	// is what Obsidian would have written.
+	if got.Link != "diagram.png" {
+		t.Errorf("link = %q, want diagram.png", got.Link)
+	}
+	if got.Size != int64(len(testPNG)) {
+		t.Errorf("size = %d, want %d", got.Size, len(testPNG))
+	}
+
+	resp = alice.do("GET", "/api/vaults/me/attachments/attachments/diagram.png", nil)
+	wantStatus(t, resp, 200)
+	if body := bodyOf(t, resp); body != testPNG {
+		t.Errorf("stored bytes differ from what was uploaded")
+	}
+}
+
+func TestUploadSuffixesRatherThanOverwrites(t *testing.T) {
+	h := newHarness(t)
+	alice := h.as("100.64.0.1", aliceWho)
+
+	first, resp := alice.upload("name=IMG_0001.jpg", "image/jpeg", "one")
+	wantStatus(t, resp, http.StatusCreated)
+	second, resp := alice.upload("name=IMG_0001.jpg", "image/jpeg", "two")
+	wantStatus(t, resp, http.StatusCreated)
+
+	if first.Path != "attachments/IMG_0001.jpg" {
+		t.Errorf("first path = %q", first.Path)
+	}
+	// Obsidian's suffix: a space and a number, before the extension so the file
+	// still opens in the right application.
+	if second.Path != "attachments/IMG_0001 1.jpg" {
+		t.Errorf("second path = %q, want attachments/IMG_0001 1.jpg", second.Path)
+	}
+
+	// Both files have to still be there. Losing the first one to the second is
+	// the exact failure this naming exists to prevent.
+	for path, want := range map[string]string{
+		"/api/vaults/me/attachments/attachments/IMG_0001.jpg":   "one",
+		"/api/vaults/me/attachments/attachments/IMG_0001 1.jpg": "two",
+	} {
+		resp := alice.do("GET", path, nil)
+		wantStatus(t, resp, 200)
+		if got := bodyOf(t, resp); got != want {
+			t.Errorf("%s = %q, want %q", path, got, want)
+		}
+	}
+}
+
+func TestUploadWithoutANameIsAPastedImage(t *testing.T) {
+	h := newHarness(t)
+	alice := h.as("100.64.0.1", aliceWho)
+
+	got, resp := alice.upload("", "image/png", testPNG)
+	wantStatus(t, resp, http.StatusCreated)
+
+	// "Pasted image 20260903221500.png", the name Obsidian would have given it.
+	if !strings.HasPrefix(got.Path, "attachments/Pasted image ") {
+		t.Errorf("path = %q, want it to start with attachments/Pasted image ", got.Path)
+	}
+	if !strings.HasSuffix(got.Path, ".png") {
+		t.Errorf("path = %q, want a .png extension from the content type", got.Path)
+	}
+	// image/jpeg must not come back as ".jpe", which is what asking the mime
+	// package for the extension list would have given us.
+	got, resp = alice.upload("", "image/jpeg", "body")
+	wantStatus(t, resp, http.StatusCreated)
+	if !strings.HasSuffix(got.Path, ".jpg") {
+		t.Errorf("jpeg paste = %q, want a .jpg extension", got.Path)
+	}
+}
+
+func TestUploadRefusesMarkdown(t *testing.T) {
+	h := newHarness(t)
+	alice := h.as("100.64.0.1", aliceWho)
+
+	_, resp := alice.upload("name=notes.md", "text/markdown", "# hi\n")
+	wantStatus(t, resp, http.StatusBadRequest)
+}
+
+func TestUploadIgnoresAnyDirectoryInTheName(t *testing.T) {
+	h := newHarness(t)
+	alice := h.as("100.64.0.1", aliceWho)
+
+	// A browser handing over a full path must not get to choose the folder;
+	// that is the preference's job.
+	got, resp := alice.upload("name=../../etc/passwd.png", "image/png", testPNG)
+	wantStatus(t, resp, http.StatusCreated)
+	if got.Path != "attachments/passwd.png" {
+		t.Errorf("path = %q, want attachments/passwd.png", got.Path)
+	}
+}
+
+func TestUploadLinkFallsBackToTheFullPath(t *testing.T) {
+	h := newHarness(t)
+	alice := h.as("100.64.0.1", aliceWho)
+	alice.do("POST", "/api/vaults/me/notes", map[string]any{"path": "Daily/x.md", "content": "# x\n"}).Body.Close()
+
+	// Put a file of the same basename somewhere else first, so the short form is
+	// ambiguous and writing it would resolve to the wrong file.
+	req, _ := http.NewRequest("POST", h.srv.URL+"/api/vaults/me/attachments/Daily/shot.png", strings.NewReader(testPNG))
+	req.Header.Set("Sec-Fetch-Site", "same-origin")
+	req.Header.Set("X-Test-Peer", alice.ip)
+	req.Header.Set("Content-Type", "image/png")
+	resp, err := h.srv.Client().Do(req)
+	if err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	resp.Body.Close()
+
+	got, resp := alice.upload("note=Notes/y.md&name=shot.png", "image/png", testPNG)
+	wantStatus(t, resp, http.StatusCreated)
+	if got.Path != "attachments/shot.png" {
+		t.Fatalf("path = %q", got.Path)
+	}
+	if got.Link != "attachments/shot.png" {
+		t.Errorf("link = %q, want the full path because the basename is ambiguous", got.Link)
+	}
+}
+
+func TestPrefsRoundTripAndChangeWhereUploadsLand(t *testing.T) {
+	h := newHarness(t)
+	alice := h.as("100.64.0.1", aliceWho)
+	alice.do("POST", "/api/vaults/me/notes", map[string]any{"path": "Daily/x.md", "content": "# x\n"}).Body.Close()
+
+	var got struct {
+		AttachmentMode   string `json:"attachmentMode"`
+		AttachmentFolder string `json:"attachmentFolder"`
+	}
+	resp := alice.getJSON("/api/prefs", &got)
+	wantStatus(t, resp, 200)
+	if got.AttachmentMode != "folder" || got.AttachmentFolder != "attachments" {
+		t.Errorf("defaults = %+v", got)
+	}
+
+	resp = alice.do("PUT", "/api/prefs", map[string]any{
+		"attachmentMode": "current", "attachmentFolder": "attachments",
+	})
+	wantStatus(t, resp, 200)
+	resp.Body.Close()
+
+	// The setting is the only thing that changed, and the same upload now lands
+	// beside the note instead.
+	up, resp := alice.upload("note=Daily/x.md&name=diagram.png", "image/png", testPNG)
+	wantStatus(t, resp, http.StatusCreated)
+	if up.Path != "Daily/diagram.png" {
+		t.Errorf("path = %q, want Daily/diagram.png", up.Path)
+	}
+}
+
+func TestPrefsRejectAnUnusableFolder(t *testing.T) {
+	h := newHarness(t)
+	alice := h.as("100.64.0.1", aliceWho)
+
+	for _, body := range []map[string]any{
+		{"attachmentMode": "elsewhere", "attachmentFolder": "attachments"},
+		{"attachmentMode": "folder", "attachmentFolder": ""},
+		{"attachmentMode": "folder", "attachmentFolder": "../escape"},
+		{"attachmentMode": "folder", "attachmentFolder": ".hidden"},
+	} {
+		resp := alice.do("PUT", "/api/prefs", body)
+		wantStatus(t, resp, http.StatusBadRequest)
+		resp.Body.Close()
+	}
+}
+
+func TestListAttachmentsSkipsNotes(t *testing.T) {
+	h := newHarness(t)
+	alice := h.as("100.64.0.1", aliceWho)
+	alice.do("POST", "/api/vaults/me/notes", map[string]any{"path": "n.md", "content": "# n\n"}).Body.Close()
+	alice.upload("name=a.png", "image/png", testPNG)
+	alice.upload("name=b.pdf", "application/pdf", "%PDF-1.4")
+
+	var got struct {
+		Attachments []struct {
+			Path string `json:"path"`
+			Size int64  `json:"size"`
+		} `json:"attachments"`
+	}
+	resp := alice.getJSON("/api/vaults/me/attachments", &got)
+	wantStatus(t, resp, 200)
+
+	var paths []string
+	for _, a := range got.Attachments {
+		paths = append(paths, a.Path)
+	}
+	want := []string{"attachments/a.png", "attachments/b.pdf"}
+	if fmt.Sprint(paths) != fmt.Sprint(want) {
+		t.Errorf("attachments = %v, want %v", paths, want)
+	}
+}
+
+// --- transclusion ---
+
+type embedReply struct {
+	Kind      string `json:"kind"`
+	Path      string `json:"path"`
+	Title     string `json:"title"`
+	Anchor    string `json:"anchor"`
+	Content   string `json:"content"`
+	Truncated bool   `json:"truncated"`
+}
+
+func (c *client) embed(vault, from, target string) embedReply {
+	c.h.t.Helper()
+	var out embedReply
+	q := url.Values{"from": {from}, "target": {target}}
+	resp := c.getJSON("/api/vaults/"+vault+"/embed?"+q.Encode(), &out)
+	wantStatus(c.h.t, resp, 200)
+	return out
+}
+
+func TestEmbedResolvesANoteAndStripsFrontmatter(t *testing.T) {
+	h := newHarness(t)
+	alice := h.as("100.64.0.1", aliceWho)
+	alice.do("POST", "/api/vaults/me/notes", map[string]any{
+		"path": "Projects/folio.md", "content": "---\ntags: [go]\n---\n\n# folio\n\nThe body.\n",
+	}).Body.Close()
+	alice.do("POST", "/api/vaults/me/notes", map[string]any{
+		"path": "Daily/x.md", "content": "![[folio]]\n",
+	}).Body.Close()
+
+	got := alice.embed("me", "Daily/x.md", "folio")
+	if got.Kind != "note" || got.Path != "Projects/folio.md" {
+		t.Fatalf("embed = %+v", got)
+	}
+	// The frontmatter is metadata about the embedded note, not text the reader
+	// asked to see inlined.
+	if strings.Contains(got.Content, "tags:") {
+		t.Errorf("content still carries frontmatter: %q", got.Content)
+	}
+	if want := "\n# folio\n\nThe body.\n"; got.Content != want {
+		t.Errorf("content = %q, want %q", got.Content, want)
+	}
+	if got.Title != "folio" {
+		t.Errorf("title = %q, want folio", got.Title)
+	}
+}
+
+func TestEmbedNarrowsToASection(t *testing.T) {
+	h := newHarness(t)
+	alice := h.as("100.64.0.1", aliceWho)
+	alice.do("POST", "/api/vaults/me/notes", map[string]any{
+		"path": "Meeting.md", "content": "# Meeting\n\nPreamble.\n\n## Actions\n\n- ship it\n\n## Other\n\nNope.\n",
+	}).Body.Close()
+
+	got := alice.embed("me", "", "Meeting#Actions")
+	if got.Kind != "note" {
+		t.Fatalf("embed = %+v", got)
+	}
+	if got.Anchor != "Actions" {
+		t.Errorf("anchor = %q", got.Anchor)
+	}
+	if want := "## Actions\n\n- ship it\n\n"; got.Content != want {
+		t.Errorf("content = %q, want %q", got.Content, want)
+	}
+}
+
+func TestEmbedReportsWhatItCannotResolve(t *testing.T) {
+	h := newHarness(t)
+	alice := h.as("100.64.0.1", aliceWho)
+	alice.do("POST", "/api/vaults/me/notes", map[string]any{
+		"path": "Meeting.md", "content": "# Meeting\n\n## Actions\n\n- ship it\n",
+	}).Body.Close()
+
+	// A note that does not exist, and a heading that does not, are both
+	// "missing" rather than an error: writing the link before the note is how
+	// people work.
+	if got := alice.embed("me", "", "Nope"); got.Kind != "missing" {
+		t.Errorf("missing note = %+v", got)
+	}
+	if got := alice.embed("me", "", "Meeting#Nope"); got.Kind != "missing" {
+		t.Errorf("missing heading = %+v", got)
+	}
+}
+
+func TestEmbedOfAnAttachmentSaysSo(t *testing.T) {
+	h := newHarness(t)
+	alice := h.as("100.64.0.1", aliceWho)
+	alice.upload("name=diagram.png", "image/png", testPNG)
+
+	got := alice.embed("me", "", "diagram.png")
+	if got.Kind != "attachment" || got.Path != "attachments/diagram.png" {
+		t.Errorf("embed = %+v", got)
+	}
+	// The bytes are not inlined; the client fetches them from the attachment
+	// endpoint so they stay cacheable and sandboxed.
+	if got.Content != "" {
+		t.Errorf("content = %q, want it empty for an attachment", got.Content)
+	}
+}
+
+func TestEmbedDoesNotLeakUnsharedNotes(t *testing.T) {
+	h := newHarness(t)
+	alice := h.as("100.64.0.1", aliceWho)
+	bob := h.as("100.64.0.2", bobWho)
+	bob.do("GET", "/api/me", nil).Body.Close() // provision bob
+
+	alice.do("POST", "/api/vaults/me/notes", map[string]any{
+		"path": "Shared.md", "content": "# Shared\n\nvisible\n",
+	}).Body.Close()
+	alice.do("POST", "/api/vaults/me/notes", map[string]any{
+		"path": "Private.md", "content": "# Private\n\nsecret\n",
+	}).Body.Close()
+	resp := alice.do("POST", "/api/shares", map[string]any{
+		"path": "Shared.md", "grantee": "bob@github", "perm": "read",
+	})
+	wantStatus(t, resp, http.StatusCreated)
+	resp.Body.Close()
+
+	if got := bob.embed("alice-github", "Shared.md", "Shared"); got.Kind != "note" {
+		t.Fatalf("bob cannot see the note shared with him: %+v", got)
+	}
+	// A share covers one path. An embed pointing outside it reports missing
+	// rather than forbidden, because "forbidden" would confirm the note exists.
+	got := bob.embed("alice-github", "Shared.md", "Private")
+	if got.Kind != "missing" {
+		t.Errorf("embed of an unshared note = %+v", got)
+	}
+	if strings.Contains(got.Content, "secret") {
+		t.Fatal("an unshared note's content leaked through an embed")
+	}
+}
+
+func TestEmbedNeedsATarget(t *testing.T) {
+	h := newHarness(t)
+	alice := h.as("100.64.0.1", aliceWho)
+	resp := alice.do("GET", "/api/vaults/me/embed", nil)
+	wantStatus(t, resp, http.StatusBadRequest)
+	resp.Body.Close()
+}
+
+func TestEmbedTruncatesAVeryLargeNote(t *testing.T) {
+	h := newHarness(t)
+	alice := h.as("100.64.0.1", aliceWho)
+	alice.do("POST", "/api/vaults/me/notes", map[string]any{
+		"path": "Big.md", "content": "# Big\n\n" + strings.Repeat("filler filler\n", 20000),
+	}).Body.Close()
+
+	got := alice.embed("me", "", "Big")
+	if !got.Truncated {
+		t.Errorf("a note far past the cap was not reported as truncated")
+	}
+	if len(got.Content) > 128<<10 {
+		t.Errorf("content is %d bytes, past the cap", len(got.Content))
+	}
+}
+
+func TestUploadWillNotCreateAHiddenFile(t *testing.T) {
+	h := newHarness(t)
+	alice := h.as("100.64.0.1", aliceWho)
+
+	// A hidden path is never listed and never indexed, so an upload that kept
+	// the dot would land somewhere the user could not find it again.
+	got, resp := alice.upload("name=.secret.png", "image/png", testPNG)
+	wantStatus(t, resp, http.StatusCreated)
+	if got.Path != "attachments/secret.png" {
+		t.Errorf("path = %q, want attachments/secret.png", got.Path)
+	}
+
+	var listed struct {
+		Attachments []struct {
+			Path string `json:"path"`
+		} `json:"attachments"`
+	}
+	resp = alice.getJSON("/api/vaults/me/attachments", &listed)
+	wantStatus(t, resp, 200)
+	if len(listed.Attachments) != 1 {
+		t.Fatalf("attachments = %+v, want the upload to be listed", listed.Attachments)
+	}
 }

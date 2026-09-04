@@ -42,7 +42,7 @@ function fakeFetch(overrides: Record<string, unknown> = {}) {
     ...overrides,
   };
 
-  return vi.fn(async (input: RequestInfo | URL) => {
+  return vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
     const url = new URL(String(input), "http://localhost");
     // Longest match wins, so /notes/Daily/x.md reaches the note rather than the
     // /notes listing whose key is a prefix of it.
@@ -377,5 +377,144 @@ describe("wikilink anchors", () => {
     const banner = document.querySelector(".banner");
     expect(banner?.className).toContain("banner-warn");
     expect(banner?.textContent).toContain("Missing");
+  });
+});
+
+describe("attachments", () => {
+  beforeEach(() => {
+    document.body.innerHTML = '<div id="app" class="app is-loading"></div>';
+    vi.stubGlobal("EventSource", FakeEventSource);
+    FakeEventSource.instances = [];
+    history.replaceState(null, "", "/");
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    document.body.innerHTML = "";
+  });
+
+  /** A fetch that records uploads and answers them the way the server would. */
+  function uploadingFetch(reply: { path: string; link: string }) {
+    const uploads: Array<{ url: URL; type: string }> = [];
+    const base = fakeFetch();
+    const fn = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input), "http://localhost");
+      if (url.pathname.endsWith("/upload")) {
+        uploads.push({ url, type: (init?.headers as Record<string, string>)?.["Content-Type"] });
+        return new Response(
+          JSON.stringify({ vault: me.vault, size: 3, sha256: "d", ...reply }),
+          { status: 201, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (url.pathname.endsWith("/attachments")) {
+        return new Response(JSON.stringify({ attachments: [{ path: reply.path, size: 3 }] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return base(input, init);
+    });
+    return { fn, uploads };
+  }
+
+  function dropFiles(host: Element, files: File[]) {
+    const dt = {
+      files,
+      types: ["Files"],
+      items: files.map((f) => ({ kind: "file", getAsFile: () => f })),
+    };
+    const e = new Event("drop", { bubbles: true, cancelable: true });
+    Object.defineProperty(e, "dataTransfer", { value: dt });
+    host.dispatchEvent(e);
+  }
+
+  it("uploads a dropped image and embeds it", async () => {
+    const { fn, uploads } = uploadingFetch({ path: "attachments/shot.png", link: "shot.png" });
+    vi.stubGlobal("fetch", fn);
+    const app = await startApp();
+    void app;
+
+    dropFiles(
+      document.querySelector(".editor-host")!,
+      [new File(["png"], "shot.png", { type: "image/png" })],
+    );
+    await new Promise((r) => setTimeout(r, 0));
+
+    // The name goes to the server, but not the folder: where it lands is the
+    // user's attachment preference, which only the server knows.
+    expect(uploads).toHaveLength(1);
+    expect(uploads[0].url.searchParams.get("name")).toBe("shot.png");
+    expect(uploads[0].url.searchParams.get("note")).toBe(note.path);
+    expect(uploads[0].type).toBe("image/png");
+
+    // The link written is the short form the server handed back, and an image
+    // gets the embedding "!".
+    expect(document.querySelector(".cm-content")!.textContent).toContain("![[shot.png]]");
+  });
+
+  it("links rather than embeds a dropped file that is not an image", async () => {
+    const { fn } = uploadingFetch({ path: "attachments/report.pdf", link: "report.pdf" });
+    vi.stubGlobal("fetch", fn);
+    await startApp();
+
+    dropFiles(
+      document.querySelector(".editor-host")!,
+      [new File(["pdf"], "report.pdf", { type: "application/pdf" })],
+    );
+    await new Promise((r) => setTimeout(r, 0));
+
+    const text = document.querySelector(".cm-content")!.textContent ?? "";
+    expect(text).toContain("[[report.pdf]]");
+    expect(text).not.toContain("![[report.pdf]]");
+  });
+
+  it("sends no name for a pasted image, so the server names it", async () => {
+    const { fn, uploads } = uploadingFetch({
+      path: "attachments/Pasted image 20260903221500.png",
+      link: "Pasted image 20260903221500.png",
+    });
+    vi.stubGlobal("fetch", fn);
+    await startApp();
+
+    const file = new File(["png"], "image.png", { type: "image/png" });
+    const e = new Event("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(e, "clipboardData", {
+      value: { items: [{ kind: "file", getAsFile: () => file }] },
+    });
+    document.querySelector(".editor-host")!.dispatchEvent(e);
+    await new Promise((r) => setTimeout(r, 0));
+
+    // A clipboard image is always called "image.png", which is worth nothing.
+    // Sending no name asks for the "Pasted image ..." one instead.
+    expect(uploads).toHaveLength(1);
+    expect(uploads[0].url.searchParams.get("name")).toBeNull();
+  });
+
+  it("refuses to upload into a note it cannot write", async () => {
+    const { fn, uploads } = uploadingFetch({ path: "attachments/x.png", link: "x.png" });
+    vi.stubGlobal("fetch", fn);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(String(input), "http://localhost");
+        if (url.pathname.endsWith("/daily")) {
+          return new Response(JSON.stringify({ ...note, perm: "read" }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        return fn(input, init);
+      }),
+    );
+    await startApp();
+
+    dropFiles(
+      document.querySelector(".editor-host")!,
+      [new File(["png"], "x.png", { type: "image/png" })],
+    );
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(uploads).toHaveLength(0);
+    expect(document.querySelector(".banner")?.textContent).toContain("read only");
   });
 });

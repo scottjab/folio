@@ -238,6 +238,10 @@ button {
 .tag-count { opacity: 0.65; }
 
 .sidebar-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
   margin-top: auto;
   padding: 0.6rem 0.4rem 0.2rem;
   font-size: 0.78rem;
@@ -653,6 +657,135 @@ button {
   max-height: 60vh;
   border-radius: var(--radius);
   border: 1px solid var(--border);
+}
+
+/* Settings sheet. It shares the palette's overlay, so only the panel is new. */
+
+.settings {
+  width: min(30rem, 92vw);
+  padding: 1.2rem;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 20px 50px rgb(0 0 0 / 25%);
+  font-family: var(--font-ui);
+}
+.settings h2 { margin: 0 0 0.2rem; font-size: 1.05rem; }
+.settings p { margin: 0 0 1rem; font-size: 0.85rem; }
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+.settings-row label { flex: 0 0 9rem; font-size: 0.85rem; color: var(--text-muted); }
+.settings-select,
+.settings-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.4rem 0.55rem;
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.settings-status { min-height: 1.2em; margin: 0 0 0.5rem; font-size: 0.8rem; }
+.settings-actions { display: flex; justify-content: flex-end; }
+.error-text { color: var(--error); }
+
+.settings-btn {
+  padding: 0.15rem 0.5rem;
+  font: inherit;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.settings-btn:hover { color: var(--text); background: var(--bg-sunken); }
+
+
+/* Transclusion: ![[Note]] rendered in place.
+ *
+ * The left rule and the recessed ground are doing real work. An embedded note
+ * is someone else's text sitting inside yours, and without a visible boundary a
+ * reader edits the outer note believing they are editing the inner one. */
+
+.cm-fol-transclusion {
+  display: block;
+  margin: 0.6em 0;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--bg-sunken);
+  overflow: hidden;
+}
+
+.cm-fol-transclusion-head {
+  padding: 0.3em 0.7em;
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-soft);
+  cursor: pointer;
+}
+
+.cm-fol-transclusion-body {
+  padding: 0.1em 0.7em 0.4em;
+}
+
+/* The nested editor is a view of another file, so it drops the chrome that
+   implies you can type in it: no caret, no active-line tint, no min-height. */
+.cm-fol-transclusion-body .cm-editor { background: transparent; }
+.cm-fol-transclusion-body .cm-content { padding: 0; caret-color: transparent; }
+.cm-fol-transclusion-body .cm-line { padding-left: 0; padding-right: 0; }
+.cm-fol-transclusion-body .cm-activeLine { background: transparent; }
+.cm-fol-transclusion-body .cm-scroller { font-size: 0.95em; }
+
+.cm-fol-transclusion-loading,
+.cm-fol-transclusion-deep {
+  padding: 0.4em 0.7em;
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.cm-fol-transclusion-missing {
+  padding: 0.4em 0.7em;
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  color: var(--warn);
+  background: var(--warn-soft);
+  cursor: pointer;
+}
+
+/* A file a browser cannot render inline still has to be reachable. */
+.cm-fol-file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  padding: 0.25em 0.6em;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  color: var(--accent);
+  text-decoration: none;
+}
+.cm-fol-file-chip::before { content: "\1F4CE"; }
+.cm-fol-file-chip:hover { background: var(--accent-soft); }
+
+/* Dragging a file over the editor. The outline says the drop will land. */
+.editor-host.is-dropping {
+  outline: 2px dashed var(--accent);
+  outline-offset: -4px;
+  background: var(--accent-soft);
 }
 
 /* Source mode: token colours, which also apply inside fenced code blocks */

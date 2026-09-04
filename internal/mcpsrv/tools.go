@@ -10,9 +10,14 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/scottjab/folio/internal/notes"
+	"github.com/scottjab/folio/internal/prefs"
 	"github.com/scottjab/folio/internal/share"
 	"github.com/scottjab/folio/internal/vaultpath"
 )
+
+// maxAttachmentBytes caps what attach_file will take, matching the HTTP API's
+// limit so an agent and a browser hit the same wall.
+const maxAttachmentBytes = 64 << 20 // 64 MiB
 
 // Every tool's input and output is a plain Go struct. mcp.AddTool derives the
 // JSON schema from it, so the struct tags below are the contract the model sees;
@@ -133,6 +138,31 @@ func (sess *session) addTools(srv *mcp.Server) {
 		Name:        "read_attachment",
 		Description: "Read a non-markdown file from a vault, such as an image embedded with ![[diagram.png]]. Returns base64.",
 	}, sess.readAttachment)
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "list_attachments",
+		Description: "List the non-markdown files in a vault: images, PDFs, anything that is not a note. Use this to find what an ![[embed]] could point at.",
+	}, sess.listAttachments)
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "attach_file",
+		Description: "Add a file to a vault and get back the link to write for it. The folder and any renaming to avoid a collision are decided by the user's own attachment setting, exactly as they are when someone drops a file into the browser, so do not try to choose a path yourself. Embed the returned link with ![[link]] for an image and [[link]] for anything else.",
+	}, sess.attachFile)
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "resolve_link",
+		Description: "Work out what a [[wikilink]] or ![[embed]] actually points at, and return the text it would render. Use this rather than guessing which note a bare name means: the answer follows the same rule the editor and the index use, and it handles a #Heading by returning just that section.",
+	}, sess.resolveLink)
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "get_settings",
+		Description: "Read this user's folio settings, currently where new attachments are filed. Worth checking before attach_file if you want to tell them where a file will land.",
+	}, sess.getSettings)
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "set_settings",
+		Description: "Change where this user's new attachments are filed. This moves nothing that already exists, it only decides where the next one goes, and it changes the behaviour of their browser and terminal too. Only call it when the user has asked you to.",
+	}, sess.setSettings)
 }
 
 func (sess *session) searchNotes(ctx context.Context, _ *mcp.CallToolRequest, in searchInput) (*mcp.CallToolResult, searchOutput, error) {
@@ -671,4 +701,172 @@ func plainSnippet(s string) string {
 		indexHighlightOpen, "",
 		indexHighlightClose, "",
 	).Replace(s)
+}
+
+// --- attachments, links, and settings ---
+//
+// These exist because an agent is a first-class folio client, not a reader with
+// a keyboard taped to it. Everything a person can do in the browser or the
+// terminal, an agent can do here, through the same operations layer, so none of
+// the three can drift from the other two.
+
+type listAttachmentsInput struct {
+	Vault string `json:"vault,omitzero" jsonschema:"Which vault to list. Defaults to this user's own."`
+}
+
+type attachmentInfo struct {
+	Path string `json:"path"`
+	Size int64  `json:"size"`
+}
+
+type listAttachmentsOutput struct {
+	Vault       string           `json:"vault"`
+	Attachments []attachmentInfo `json:"attachments"`
+}
+
+func (sess *session) listAttachments(ctx context.Context, _ *mcp.CallToolRequest, in listAttachmentsInput) (*mcp.CallToolResult, listAttachmentsOutput, error) {
+	sc, err := sess.scope(ctx, in.Vault)
+	if err != nil {
+		return nil, listAttachmentsOutput{}, toolErr(err)
+	}
+	list, err := sess.Notes.ListAttachments(ctx, sc)
+	if err != nil {
+		return nil, listAttachmentsOutput{}, toolErr(err)
+	}
+
+	out := listAttachmentsOutput{Vault: sc.Dir, Attachments: make([]attachmentInfo, 0, len(list))}
+	for _, a := range list {
+		out.Attachments = append(out.Attachments, attachmentInfo{Path: a.Path, Size: a.Size})
+	}
+	return nil, out, nil
+}
+
+type attachInput struct {
+	Base64 string `json:"base64" jsonschema:"The file's bytes, base64 encoded."`
+	Name   string `json:"name,omitzero" jsonschema:"The file's name, for example diagram.png. Only the filename is used; any folder in it is ignored, because where the file goes is the user's setting. Leave it out for a generated \"Pasted image ...\" name."`
+	Note   string `json:"note,omitzero" jsonschema:"The note this file is being attached to, for example Daily/2026-08-30.md. It decides the folder under the two note-relative settings, and it is the note the returned link is shortened for."`
+	Vault  string `json:"vault,omitzero"`
+	// MimeType only matters for a file arriving without a name, where it picks
+	// the extension. Naming it explicitly beats sniffing bytes we were handed.
+	MimeType string `json:"mimeType,omitzero" jsonschema:"The file's type, for example image/png. Only used to pick an extension when no name is given."`
+}
+
+type attachOutput struct {
+	Vault string `json:"vault"`
+	Path  string `json:"path" jsonschema:"Where the file actually landed, which may differ from the name you sent if something was already called that."`
+	Size  int64  `json:"size"`
+	Link  string `json:"link" jsonschema:"What to write inside brackets to reference the file: ![[link]] for an image, [[link]] for anything else."`
+}
+
+func (sess *session) attachFile(ctx context.Context, _ *mcp.CallToolRequest, in attachInput) (*mcp.CallToolResult, attachOutput, error) {
+	sc, err := sess.scope(ctx, in.Vault)
+	if err != nil {
+		return nil, attachOutput{}, toolErr(err)
+	}
+	// Base64 rather than raw bytes because MCP arguments are JSON. A model that
+	// sends something that is not base64 gets told that, rather than having its
+	// prose written to disk as a PNG.
+	content, err := base64.StdEncoding.DecodeString(in.Base64)
+	if err != nil {
+		return nil, attachOutput{}, fmt.Errorf("base64 is not valid: %w", err)
+	}
+	if len(content) > maxAttachmentBytes {
+		return nil, attachOutput{}, fmt.Errorf("attachment is %d bytes, over the %d byte limit", len(content), maxAttachmentBytes)
+	}
+
+	at, err := sess.Notes.Attach(ctx, sc, notes.Upload{
+		Note:        in.Note,
+		Name:        in.Name,
+		ContentType: in.MimeType,
+		Content:     content,
+	})
+	if err != nil {
+		return nil, attachOutput{}, toolErr(err)
+	}
+	return nil, attachOutput{Vault: at.Vault, Path: at.Path, Size: at.Size, Link: at.Link}, nil
+}
+
+type resolveInput struct {
+	Target string `json:"target" jsonschema:"What is written between the brackets, for example \"Projects/folio\", \"folio\", or \"Meeting#Actions\". Leave off the brackets and any leading exclamation mark."`
+	From   string `json:"from,omitzero" jsonschema:"The note the link is written in. A bare name can resolve to different notes depending on where it sits, so pass this whenever you know it."`
+	Vault  string `json:"vault,omitzero"`
+}
+
+type resolveOutput struct {
+	Kind      string `json:"kind" jsonschema:"\"note\" if it points at a note, \"attachment\" if at a file, \"missing\" if at nothing yet."`
+	Vault     string `json:"vault"`
+	Path      string `json:"path,omitzero" jsonschema:"The note or file it resolves to."`
+	Title     string `json:"title,omitzero"`
+	Anchor    string `json:"anchor,omitzero"`
+	Content   string `json:"content,omitzero" jsonschema:"The text this link would render, narrowed to the anchor's section when there was one. Empty for an attachment; use read_attachment for those."`
+	Truncated bool   `json:"truncated,omitzero"`
+}
+
+func (sess *session) resolveLink(ctx context.Context, _ *mcp.CallToolRequest, in resolveInput) (*mcp.CallToolResult, resolveOutput, error) {
+	sc, err := sess.scope(ctx, in.Vault)
+	if err != nil {
+		return nil, resolveOutput{}, toolErr(err)
+	}
+	// Tolerate a model that pasted the whole link rather than its interior. It
+	// is a small kindness that costs nothing and saves a retry.
+	target := strings.TrimSpace(in.Target)
+	target = strings.TrimPrefix(target, "!")
+	target = strings.TrimSuffix(strings.TrimPrefix(target, "[["), "]]")
+	if strings.TrimSpace(target) == "" {
+		return nil, resolveOutput{}, fmt.Errorf("target is empty")
+	}
+
+	em, err := sess.Notes.Embed(ctx, sc, in.From, target)
+	if err != nil {
+		return nil, resolveOutput{}, toolErr(err)
+	}
+	return nil, resolveOutput{
+		Kind: string(em.Kind), Vault: em.Vault, Path: em.Path,
+		Title: em.Title, Anchor: em.Anchor, Content: em.Content, Truncated: em.Truncated,
+	}, nil
+}
+
+type settingsInput struct{}
+
+type settingsOutput struct {
+	AttachmentMode   string `json:"attachmentMode" jsonschema:"Where new attachments go: \"folder\" (all in one folder), \"vault\" (the vault root), \"current\" (beside the note), or \"subfolder\" (a named folder beside the note)."`
+	AttachmentFolder string `json:"attachmentFolder" jsonschema:"The folder name, used by the \"folder\" and \"subfolder\" modes."`
+}
+
+func (sess *session) getSettings(ctx context.Context, _ *mcp.CallToolRequest, _ settingsInput) (*mcp.CallToolResult, settingsOutput, error) {
+	p, err := sess.Notes.Prefs.Get(ctx, sess.user.ID)
+	if err != nil {
+		return nil, settingsOutput{}, toolErr(err)
+	}
+	return nil, settingsOutput{
+		AttachmentMode:   string(p.Attachments.Mode),
+		AttachmentFolder: p.Attachments.Folder,
+	}, nil
+}
+
+type setSettingsInput struct {
+	AttachmentMode   string `json:"attachmentMode" jsonschema:"One of \"folder\", \"vault\", \"current\", or \"subfolder\"."`
+	AttachmentFolder string `json:"attachmentFolder,omitzero" jsonschema:"The folder name. Required by \"folder\" and \"subfolder\", ignored by the other two."`
+}
+
+func (sess *session) setSettings(ctx context.Context, _ *mcp.CallToolRequest, in setSettingsInput) (*mcp.CallToolResult, settingsOutput, error) {
+	folder := in.AttachmentFolder
+	if folder == "" {
+		// The folder is kept across a mode change, so a caller switching to a
+		// mode that does not use one must not wipe what was there.
+		if current, err := sess.Notes.Prefs.Get(ctx, sess.user.ID); err == nil {
+			folder = current.Attachments.Folder
+		}
+	}
+	next := prefs.Prefs{Attachments: prefs.Attachments{
+		Mode:   prefs.AttachmentMode(in.AttachmentMode),
+		Folder: folder,
+	}}
+	if err := sess.Notes.Prefs.Set(ctx, sess.user.ID, next); err != nil {
+		return nil, settingsOutput{}, toolErr(err)
+	}
+	return nil, settingsOutput{
+		AttachmentMode:   string(next.Attachments.Mode),
+		AttachmentFolder: next.Attachments.Folder,
+	}, nil
 }

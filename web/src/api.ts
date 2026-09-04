@@ -50,6 +50,43 @@ export interface VaultInfo {
   isMine: boolean;
 }
 
+export interface AttachmentInfo {
+  path: string;
+  size: number;
+}
+
+/** Where the server filed an uploaded file. */
+export interface Upload {
+  vault: string;
+  path: string;
+  size: number;
+  sha256: string;
+  /**
+   * What to write inside [[ ]] to reference the file: the bare filename when
+   * that is unambiguous in the vault, the full path when it is not. The server
+   * decides this so the browser and the terminal client cannot disagree.
+   */
+  link: string;
+}
+
+/** A resolved ![[embed]]. */
+export interface Embed {
+  kind: "note" | "attachment" | "missing";
+  vault: string;
+  path?: string;
+  title?: string;
+  anchor?: string;
+  content?: string;
+  truncated?: boolean;
+}
+
+/** Settings that follow a user between the browser and the terminal. */
+export interface Prefs {
+  /** "vault", "folder", "current", or "subfolder", by Obsidian's names. */
+  attachmentMode: string;
+  attachmentFolder: string;
+}
+
 export interface ShareInfo {
   id: string;
   vault: string;
@@ -196,15 +233,50 @@ export const api = {
   attachmentURL: (vault: string, path: string) =>
     `/api/vaults/${enc(vault)}/attachments/${enc(path)}`,
 
-  uploadAttachment: async (vault: string, path: string, file: File) => {
-    const res = await fetch(`/api/vaults/${enc(vault)}/attachments/${enc(path)}`, {
+  listAttachments: (vault: string) =>
+    request<{ attachments: AttachmentInfo[] }>(`/api/vaults/${enc(vault)}/attachments`).then(
+      (r) => r.attachments,
+    ),
+
+  /**
+   * Uploads a dropped or pasted file.
+   *
+   * The destination folder is deliberately not ours to choose: we say which note
+   * we are inserting into and what the file was called, and the server applies
+   * the user's attachment preference. Passing an empty name asks for a
+   * "Pasted image ..." name, which is what a clipboard image should get.
+   */
+  upload: async (vault: string, note: string, name: string, file: Blob) => {
+    const q = new URLSearchParams();
+    if (note) q.set("note", note);
+    if (name) q.set("name", name);
+    const res = await fetch(`/api/vaults/${enc(vault)}/upload?${q}`, {
       method: "POST",
       headers: { "Content-Type": file.type || "application/octet-stream" },
       body: file,
     });
-    if (!res.ok) throw new ApiError(await res.text(), res.status);
-    return res.json();
+    if (!res.ok) {
+      let message = `${res.status} ${res.statusText}`;
+      try {
+        message = JSON.parse(await res.text())?.error ?? message;
+      } catch {
+        // A non-JSON error body is still worth failing on, just less legibly.
+      }
+      throw new ApiError(message, res.status);
+    }
+    return (await res.json()) as Upload;
   },
+
+  embed: (vault: string, from: string, target: string) => {
+    const q = new URLSearchParams({ target });
+    if (from) q.set("from", from);
+    return request<Embed>(`/api/vaults/${enc(vault)}/embed?${q}`);
+  },
+
+  prefs: () => request<Prefs>("/api/prefs"),
+
+  setPrefs: (p: Prefs) =>
+    request<Prefs>("/api/prefs", { method: "PUT", body: JSON.stringify(p) }),
 };
 
 /** One change event from the server's SSE stream. */

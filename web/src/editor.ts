@@ -30,13 +30,25 @@ import { tableRendering } from "./table";
 /** The two ways to look at the same buffer. */
 export type Mode = "preview" | "source";
 
-/** Everything the editor needs from the app around it. */
-export interface EditorOptions extends LivePreviewHandlers {
+/**
+ * Everything the editor needs from the app around it.
+ *
+ * renderEmbedded is deliberately not in here: mounting a nested read-only view
+ * is the editor's own job, and asking the app for it would mean exporting the
+ * extension list so the app could rebuild it.
+ */
+export interface EditorOptions extends Omit<LivePreviewHandlers, "renderEmbedded"> {
   parent: HTMLElement;
   /** Called on every document change, for the autosave timer. */
   onChange(content: string): void;
-  /** Notes to offer when the user types `[[`. */
-  completeNotes(): Array<{ path: string; title: string }>;
+  /**
+   * Notes to offer when the user types `[[`.
+   *
+   * insert is what actually goes in the brackets: the shortest form that still
+   * resolves, which is what Obsidian writes. The app computes it because only it
+   * has the vault index to know whether a bare name is ambiguous.
+   */
+  completeNotes(): Array<{ path: string; title: string; insert: string }>;
   /** Tags to offer when the user types `#`. */
   completeTags(): string[];
   /** Cmd/Ctrl-S: save immediately rather than waiting for the timer. */
@@ -77,12 +89,12 @@ function completions(opts: EditorOptions) {
         .filter((n) => n.path.toLowerCase().includes(typed) || n.title.toLowerCase().includes(typed))
         .slice(0, 50)
         .map((n) => ({
-          label: n.path.replace(/\.md$/, ""),
+          label: n.insert,
           detail: n.title,
           type: "text",
           // Close the brackets for the user; typing "]]" by hand is tedious.
           apply: (view: EditorView, _c: unknown, from: number, to: number) => {
-            const insert = n.path.replace(/\.md$/, "") + "]]";
+            const insert = n.insert + "]]";
             view.dispatch({
               changes: { from, to, insert },
               selection: { anchor: from + insert.length },
@@ -178,8 +190,50 @@ export class Editor {
    * Two pieces, because a table has to replace whole lines and CodeMirror only
    * accepts block decorations from a state field, never from a view plugin.
    */
-  private preview(): Extension {
-    return [livePreview(this.opts), tableRendering(this.opts)];
+  private preview(stack: string[] = []): Extension {
+    const handlers = this.handlers();
+    return [livePreview(handlers, stack), tableRendering(handlers)];
+  }
+
+  /**
+   * The live-preview handlers, which are the app's plus the one the editor
+   * supplies for itself.
+   */
+  private handlers(): LivePreviewHandlers {
+    return {
+      ...this.opts,
+      renderEmbedded: (host, content, stack) => this.mountEmbedded(host, content, stack),
+    };
+  }
+
+  /**
+   * Mounts a read-only view of content inside host, using this same renderer.
+   *
+   * An embedded note has to look like a note. Rendering it with a second,
+   * simpler markdown pass is how ![[Note]] ends up showing a table as pipes
+   * while the note itself shows a table, so it gets the real thing: the same
+   * parser, the same decorations, the same table renderer. stack carries the
+   * chain of notes already on screen so a cycle stops rather than recursing.
+   */
+  private mountEmbedded(host: HTMLElement, content: string, stack: string[]): () => void {
+    const view = new EditorView({
+      parent: host,
+      state: EditorState.create({
+        doc: content,
+        extensions: [
+          markdown({ base: markdownLanguage, extensions: folioMarkdown, codeLanguages: [] }),
+          syntaxHighlighting(highlight),
+          EditorView.lineWrapping,
+          // Read-only rather than merely non-editable: an embed is a view of
+          // another file, and a keystroke landing here would edit a buffer that
+          // is never saved anywhere.
+          EditorState.readOnly.of(true),
+          EditorView.editable.of(false),
+          this.preview(stack),
+        ],
+      }),
+    });
+    return () => view.destroy();
   }
 
   /**

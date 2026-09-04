@@ -28,6 +28,8 @@ function mount(doc = "", handlers: Partial<LivePreviewHandlers> = {}) {
     openTag: () => {},
     isResolved: () => true,
     resolveEmbed: () => null,
+    // Nothing transcludes unless a test says so; "missing" is the quiet answer.
+    loadEmbed: async () => ({ kind: "missing" as const }),
     ...handlers,
   });
   mounted.push(editor);

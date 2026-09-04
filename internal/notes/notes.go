@@ -20,6 +20,7 @@ import (
 	"github.com/scottjab/folio/internal/identity"
 	"github.com/scottjab/folio/internal/index"
 	"github.com/scottjab/folio/internal/markdown"
+	"github.com/scottjab/folio/internal/prefs"
 	"github.com/scottjab/folio/internal/share"
 	"github.com/scottjab/folio/internal/store"
 	"github.com/scottjab/folio/internal/vault"
@@ -41,6 +42,10 @@ type Deps struct {
 	Identity *identity.Resolver
 	Shares   *share.Resolver
 	Bus      *events.Bus
+
+	// Prefs supplies the per-user settings the operations layer has to obey,
+	// currently just where an attachment is filed.
+	Prefs *prefs.Store
 }
 
 // Service performs note operations on behalf of a user.
@@ -48,8 +53,14 @@ type Service struct {
 	Deps
 }
 
-// New returns a Service.
-func New(d Deps) *Service { return &Service{Deps: d} }
+// New returns a Service. A nil Prefs is built from the database handle, so
+// callers that do not care about settings do not have to wire one up.
+func New(d Deps) *Service {
+	if d.Prefs == nil && d.DB != nil {
+		d.Prefs = prefs.New(d.DB)
+	}
+	return &Service{Deps: d}
+}
 
 // Scope is a resolved "which vault, whose, and opened" answer. Handlers build
 // one per request and pass it to every call, so the vault lookup and the

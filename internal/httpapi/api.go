@@ -23,6 +23,7 @@ import (
 	"github.com/scottjab/folio/internal/identity"
 	"github.com/scottjab/folio/internal/index"
 	"github.com/scottjab/folio/internal/notes"
+	"github.com/scottjab/folio/internal/prefs"
 	"github.com/scottjab/folio/internal/share"
 	"github.com/scottjab/folio/internal/store"
 	"github.com/scottjab/folio/internal/vault"
@@ -126,9 +127,15 @@ func (a *API) routes() {
 	a.mux.Handle("POST /api/vaults/{vault}/edit", api(a.handleEditNote))
 	a.mux.Handle("GET /api/vaults/{vault}/daily", api(a.handleDailyNote))
 	a.mux.Handle("GET /api/vaults/{vault}/backlinks/{path...}", api(a.handleBacklinks))
+	a.mux.Handle("GET /api/vaults/{vault}/embed", api(a.handleEmbed))
 
+	a.mux.Handle("GET /api/vaults/{vault}/attachments", api(a.handleListAttachments))
 	a.mux.Handle("GET /api/vaults/{vault}/attachments/{path...}", api(a.handleGetAttachment))
 	a.mux.Handle("POST /api/vaults/{vault}/attachments/{path...}", api(a.handlePutAttachment))
+	a.mux.Handle("POST /api/vaults/{vault}/upload", api(a.handleUpload))
+
+	a.mux.Handle("GET /api/prefs", api(a.handleGetPrefs))
+	a.mux.Handle("PUT /api/prefs", api(a.handlePutPrefs))
 
 	a.mux.Handle("GET /api/search", api(a.handleSearch))
 	a.mux.Handle("GET /api/tags", api(a.handleTags))
@@ -239,7 +246,9 @@ func statusFor(err error) int {
 		return http.StatusConflict
 	case errors.Is(err, identity.ErrUnknownUser),
 		errors.Is(err, notes.ErrNoMatch),
-		errors.Is(err, notes.ErrAmbiguous):
+		errors.Is(err, notes.ErrAmbiguous),
+		errors.Is(err, notes.ErrNotAttachment),
+		errors.Is(err, prefs.ErrInvalidPref):
 		return http.StatusBadRequest
 	default:
 		return http.StatusInternalServerError

@@ -4,7 +4,9 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -821,5 +823,269 @@ func TestSwitchingNotesWithUnsavedEdits(t *testing.T) {
 	}
 	if strings.Contains(after.Content, "thrown away") {
 		t.Errorf("the discarded text was written anyway: %q", after.Content)
+	}
+}
+
+// --- links, attachments, and transclusion ---
+
+func TestTypingTwoBracketsOpensCompletion(t *testing.T) {
+	d := newDriver(t)
+	seed(t, d.cl, "Projects/folio.md", "# folio\n")
+	seed(t, d.cl, "Scratch.md", "# Scratch\n")
+	d.send(eventMsg{}) // nudge the link index to reload
+	d.settle()
+
+	d.openPath("Scratch.md")
+	d.key("i") // start editing
+	if !d.m.editing {
+		t.Fatal("not editing")
+	}
+	d.typeText("see [[")
+	d.settle()
+
+	if d.m.pick == nil || d.m.pick.kind != pickComplete {
+		t.Fatalf("typing [[ did not open completion, picker = %+v", d.m.pick)
+	}
+	// The offered target is the short form, which is what Obsidian inserts.
+	var labels []string
+	for _, it := range d.m.pick.items {
+		labels = append(labels, it.label)
+	}
+	if !slices.Contains(labels, "folio") {
+		t.Errorf("completions = %v, want the short form 'folio'", labels)
+	}
+
+	// Keystrokes now belong to the picker's filter rather than the buffer, so
+	// narrowing to the note you meant is the same motion as in the browser.
+	d.typeText("folio")
+	d.key("enter")
+	if d.m.pick != nil {
+		t.Error("the picker stayed open after inserting")
+	}
+	if got := d.m.ta.Value(); !strings.Contains(got, "see [[folio]]") {
+		t.Errorf("buffer = %q, want it to contain see [[folio]]", got)
+	}
+}
+
+func TestCompletionFallsBackToTheFullPath(t *testing.T) {
+	d := newDriver(t)
+	// Two notes answer to "folio", so only the one resolution actually picks
+	// can use the bare name; the other has to be written out in full.
+	seed(t, d.cl, "Projects/folio.md", "# a\n")
+	seed(t, d.cl, "Archive/folio.md", "# b\n")
+	seed(t, d.cl, "Scratch.md", "# Scratch\n")
+	d.send(eventMsg{})
+	d.settle()
+
+	d.openPath("Scratch.md")
+	var labels []string
+	for _, p := range d.m.links.paths {
+		if strings.HasSuffix(p, "folio.md") {
+			labels = append(labels, d.m.links.shortest(p, "Scratch.md"))
+		}
+	}
+	slices.Sort(labels)
+	want := []string{"Projects/folio", "folio"}
+	if !slices.Equal(labels, want) {
+		t.Errorf("shortest forms = %v, want %v", labels, want)
+	}
+}
+
+func TestAttachUploadsAndLinks(t *testing.T) {
+	d := newDriver(t)
+	seed(t, d.cl, "Scratch.md", "# Scratch\n")
+	d.settle()
+	d.openPath("Scratch.md")
+
+	// A real file on disk, which is what the prompt asks for.
+	dir := t.TempDir()
+	png := filepath.Join(dir, "shot.png")
+	if err := os.WriteFile(png, []byte("\x89PNG\r\n\x1a\n0123"), 0o644); err != nil {
+		t.Fatalf("writing the file to attach: %v", err)
+	}
+
+	d.key("A")
+	if d.m.pr.kind != prAttach {
+		t.Fatalf("A did not ask for a file, prompt = %v", d.m.pr.kind)
+	}
+	d.typeText(png)
+	d.key("enter")
+	d.settle()
+
+	// The server filed it under the default attachment folder and the note now
+	// embeds it by its short name.
+	note, err := d.cl.Note(t.Context(), "alice-github", "Scratch.md")
+	if err != nil {
+		t.Fatalf("reading the note back: %v", err)
+	}
+	if !strings.Contains(note.Content, "![[shot.png]]") {
+		t.Errorf("note = %q, want it to embed ![[shot.png]]", note.Content)
+	}
+	files, err := d.cl.ListAttachments(t.Context(), "alice-github")
+	if err != nil {
+		t.Fatalf("listing attachments: %v", err)
+	}
+	if len(files) != 1 || files[0].Path != "attachments/shot.png" {
+		t.Errorf("attachments = %+v, want attachments/shot.png", files)
+	}
+}
+
+func TestAttachRefusesAReadOnlyNote(t *testing.T) {
+	d := newDriver(t)
+	seed(t, d.cl, "Scratch.md", "# Scratch\n")
+	d.settle()
+	d.openPath("Scratch.md")
+
+	d.m.note.Perm = client.PermRead
+	d.key("A")
+	if d.m.pr.kind == prAttach {
+		t.Error("A asked for a file to put in a note that cannot be written")
+	}
+	if !strings.Contains(d.view(), "read only") {
+		t.Errorf("no explanation on screen:\n%s", d.view())
+	}
+}
+
+func TestTranscludesAnEmbeddedNote(t *testing.T) {
+	d := newDriver(t)
+	seed(t, d.cl, "Meeting.md", "# Meeting\n\n## Actions\n\n- ship it\n\n## Other\n\nNope.\n")
+	seed(t, d.cl, "Daily.md", "# Daily\n\n![[Meeting#Actions]]\n")
+	d.settle()
+
+	d.openPath("Daily.md")
+	d.settle()
+
+	view := d.view()
+	// The embedded section is rendered in place, and only that section.
+	if !strings.Contains(view, "ship it") {
+		t.Errorf("the embedded section is not on screen:\n%s", view)
+	}
+	if strings.Contains(view, "Nope.") {
+		t.Errorf("the embed pulled in the whole note, not just the section:\n%s", view)
+	}
+	// The source line is gone, replaced by what it named.
+	if strings.Contains(view, "![[Meeting#Actions]]") {
+		t.Errorf("the embed was not expanded:\n%s", view)
+	}
+}
+
+func TestTranscludingAMissingNoteSaysSo(t *testing.T) {
+	d := newDriver(t)
+	seed(t, d.cl, "Daily.md", "# Daily\n\n![[Nope]]\n")
+	d.settle()
+
+	d.openPath("Daily.md")
+	d.settle()
+
+	if !strings.Contains(d.view(), "does not exist yet") {
+		t.Errorf("a dangling embed said nothing:\n%s", d.view())
+	}
+}
+
+func TestTranscludingAnAttachmentNamesTheFile(t *testing.T) {
+	d := newDriver(t)
+	seed(t, d.cl, "Daily.md", "# Daily\n\n![[shot.png]]\n")
+	if _, err := d.cl.Upload(t.Context(), "alice-github", "Daily.md", "shot.png", "image/png", []byte("png")); err != nil {
+		t.Fatalf("uploading: %v", err)
+	}
+	d.settle()
+
+	d.openPath("Daily.md")
+	d.settle()
+
+	// A terminal cannot draw the picture, but it can say which file it is.
+	if !strings.Contains(d.view(), "attachments/shot.png") {
+		t.Errorf("the embedded file is not named on screen:\n%s", d.view())
+	}
+}
+
+func TestSettingsChangeWhereAttachmentsLand(t *testing.T) {
+	d := newDriver(t)
+	seed(t, d.cl, "Daily/Mon.md", "# Mon\n")
+	d.settle()
+	d.openPath("Daily/Mon.md")
+
+	d.key(",")
+	if d.m.pick == nil || d.m.pick.kind != pickSetting {
+		t.Fatalf("',' did not open settings, picker = %+v", d.m.pick)
+	}
+	// "Beside the note" is the third option and needs no folder name.
+	d.key("down")
+	d.key("down")
+	d.key("enter")
+	d.settle()
+
+	if d.m.prefs.AttachmentMode != "current" {
+		t.Fatalf("mode = %q, want current", d.m.prefs.AttachmentMode)
+	}
+
+	dir := t.TempDir()
+	png := filepath.Join(dir, "shot.png")
+	if err := os.WriteFile(png, []byte("png"), 0o644); err != nil {
+		t.Fatalf("writing the file to attach: %v", err)
+	}
+	d.key("A")
+	d.typeText(png)
+	d.key("enter")
+	d.settle()
+
+	files, err := d.cl.ListAttachments(t.Context(), "alice-github")
+	if err != nil {
+		t.Fatalf("listing attachments: %v", err)
+	}
+	// The setting is server-side, so the terminal and the browser file things in
+	// the same place.
+	if len(files) != 1 || files[0].Path != "Daily/shot.png" {
+		t.Errorf("attachments = %+v, want Daily/shot.png", files)
+	}
+}
+
+func TestInsertAtCursorLandsWhereTheCursorIs(t *testing.T) {
+	d := newDriver(t)
+	seed(t, d.cl, "Scratch.md", "# Scratch\n")
+	d.settle()
+	d.openPath("Scratch.md")
+	d.key("i")
+
+	// A buffer with several lines, one of them long enough to soft-wrap in the
+	// note pane, and one carrying a double-width rune. Both are where naive
+	// cursor arithmetic goes wrong: CursorDown moves a visual row rather than a
+	// logical one, and a display-width column counts an emoji twice.
+	d.m.ta.SetValue("one\n" + strings.Repeat("wrapping text ", 20) + "\n日本語\nlast")
+	d.settle()
+
+	for _, tc := range []struct {
+		name string
+		off  int
+	}{
+		{"start of the buffer", 0},
+		{"end of the first line", 3},
+		{"start of the wrapped line", 4},
+		{"inside the wrapped line", 4 + 150},
+		{"after a double-width rune", 4 + 280 + 1 + 2},
+		{"end of the buffer", len([]rune(d.m.ta.Value()))},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			before := []rune(d.m.ta.Value())
+			if tc.off > len(before) {
+				t.Skipf("offset %d is past the buffer", tc.off)
+			}
+			d.m.setCursorOffset(tc.off)
+			if got := d.m.cursorOffset(); got != tc.off {
+				t.Fatalf("cursorOffset after setting %d = %d", tc.off, got)
+			}
+
+			d.m.insertAtCursor("X")
+			want := string(before[:tc.off]) + "X" + string(before[tc.off:])
+			if got := d.m.ta.Value(); got != want {
+				t.Errorf("insert at %d put the text in the wrong place", tc.off)
+			}
+			// The cursor has to end up after what was written, or typing a
+			// second link overwrites the first.
+			if got := d.m.cursorOffset(); got != tc.off+1 {
+				t.Errorf("cursor = %d after inserting at %d, want %d", got, tc.off, tc.off+1)
+			}
+			d.m.ta.SetValue(string(before))
+		})
 	}
 }

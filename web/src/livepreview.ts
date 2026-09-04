@@ -24,13 +24,51 @@ import {
 } from "@codemirror/view";
 import type { SyntaxNodeRef } from "@lezer/common";
 
+/** What an ![[embed]] turned out to point at, once the server has resolved it. */
+export interface EmbedResult {
+  kind: "note" | "attachment" | "missing";
+  path?: string;
+  title?: string;
+  content?: string;
+  truncated?: boolean;
+  /** Where to fetch an attachment from. Only set when kind is "attachment". */
+  href?: string;
+}
+
 /** What a click on a rendered wikilink or tag reports back to the app. */
 export interface LivePreviewHandlers {
   openLink(target: string, anchor: string): void;
   openTag(tag: string): void;
+  /** The image URL for a target that names one, or null for anything else. */
   resolveEmbed(target: string): string | null;
   isResolved(target: string): boolean;
+
+  /**
+   * Resolves an ![[embed]] that is not an image. Resolution and section
+   * extraction happen on the server so the browser and the terminal client
+   * inline the same span of text.
+   */
+  loadEmbed(target: string, anchor: string): Promise<EmbedResult>;
+
+  /**
+   * Renders markdown into host using this same live preview, read only, and
+   * returns a teardown.
+   *
+   * An embedded note has to look like a note, which means running the real
+   * renderer over it rather than a second, simpler one that drifts. stack is
+   * the chain of notes already being rendered, and is how a note that embeds
+   * itself stops instead of recursing.
+   */
+  renderEmbedded(host: HTMLElement, content: string, stack: string[]): () => void;
 }
+
+/**
+ * How deep transclusions may nest before they stop expanding.
+ *
+ * Three is enough for a note that pulls in a section that pulls in a snippet,
+ * and shallow enough that a page cannot quietly mount dozens of editors.
+ */
+export const maxEmbedDepth = 3;
 
 /** Hides a range entirely: the markup characters of a rendered element. */
 const hide = Decoration.replace({});
@@ -130,14 +168,39 @@ class TagWidget extends WidgetType {
   }
 }
 
+/**
+ * The display size in an embed's alias slot: `![[shot.png|300]]` or
+ * `![[shot.png|300x200]]`, Obsidian's syntax.
+ *
+ * Anything not of that shape is alt text rather than a size, so it returns null
+ * and the image renders at its natural width.
+ */
+export function parseEmbedSize(alias: string): { width: number; height?: number } | null {
+  const m = /^\s*(\d+)\s*(?:x\s*(\d+)\s*)?$/.exec(alias);
+  if (!m) return null;
+  const width = Number(m[1]);
+  if (!width) return null;
+  const height = m[2] ? Number(m[2]) : undefined;
+  return height ? { width, height } : { width };
+}
+
 /** An embedded image, from ![[file.png]] or ![alt](file.png). */
 class ImageWidget extends WidgetType {
-  constructor(readonly src: string, readonly alt: string) {
+  constructor(
+    readonly src: string,
+    readonly alt: string,
+    readonly size: { width: number; height?: number } | null = null,
+  ) {
     super();
   }
 
   eq(other: ImageWidget) {
-    return other.src === this.src && other.alt === this.alt;
+    return (
+      other.src === this.src &&
+      other.alt === this.alt &&
+      other.size?.width === this.size?.width &&
+      other.size?.height === this.size?.height
+    );
   }
 
   toDOM() {
@@ -147,9 +210,137 @@ class ImageWidget extends WidgetType {
     img.src = this.src;
     img.alt = this.alt;
     img.loading = "lazy";
+    if (this.size) {
+      // A width attribute rather than a style, so the stylesheet's max-width
+      // still wins on a narrow screen and the image never overflows the page.
+      img.width = this.size.width;
+      if (this.size.height) img.height = this.size.height;
+    }
     wrap.appendChild(img);
     return wrap;
   }
+}
+
+/**
+ * An embedded note: ![[Note]] or ![[Note#Heading]], rendered in place.
+ *
+ * The content is fetched rather than read from the open buffer because the
+ * target is usually a different note, and the server is what decides which note
+ * a target resolves to and where a heading's section ends.
+ */
+class TransclusionWidget extends WidgetType {
+  private teardown: (() => void) | null = null;
+
+  constructor(
+    readonly target: string,
+    readonly anchor: string,
+    readonly stack: string[],
+    readonly handlers: LivePreviewHandlers,
+  ) {
+    super();
+  }
+
+  eq(other: TransclusionWidget) {
+    return (
+      other.target === this.target &&
+      other.anchor === this.anchor &&
+      other.stack.join("\u0000") === this.stack.join("\u0000")
+    );
+  }
+
+  toDOM() {
+    const wrap = document.createElement("div");
+    wrap.className = "cm-fol-transclusion";
+    wrap.append(h("div", "cm-fol-transclusion-loading", "Loading..."));
+
+    void this.handlers
+      .loadEmbed(this.target, this.anchor)
+      .then((res) => this.fill(wrap, res))
+      .catch(() => {
+        wrap.replaceChildren(
+          h("div", "cm-fol-transclusion-missing", `Could not load ${this.label()}`),
+        );
+      });
+    return wrap;
+  }
+
+  private label() {
+    return this.anchor ? `${this.target}#${this.anchor}` : this.target;
+  }
+
+  private fill(wrap: HTMLElement, res: EmbedResult) {
+    if (res.kind === "missing") {
+      const el = h("div", "cm-fol-transclusion-missing", `${this.label()} does not exist yet`);
+      el.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        this.handlers.openLink(this.target, this.anchor);
+      });
+      wrap.replaceChildren(el);
+      return;
+    }
+
+    if (res.kind === "attachment") {
+      // A PDF or a zip cannot render inline, but it should still be reachable
+      // rather than silently nothing.
+      const a = document.createElement("a");
+      a.className = "cm-fol-file-chip";
+      a.href = res.href ?? "#";
+      a.target = "_blank";
+      a.rel = "noreferrer";
+      a.textContent = res.path ?? this.target;
+      wrap.replaceChildren(a);
+      return;
+    }
+
+    const path = res.path ?? this.target;
+
+    // A note that embeds itself, directly or through a chain, would otherwise
+    // mount editors until the tab dies.
+    if (this.stack.includes(path)) {
+      wrap.replaceChildren(
+        h("div", "cm-fol-transclusion-missing", `${this.label()} embeds itself`),
+      );
+      return;
+    }
+
+    const head = h("div", "cm-fol-transclusion-head", res.title || path);
+    head.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      this.handlers.openLink(this.target, this.anchor);
+    });
+
+    const body = h("div", "cm-fol-transclusion-body", "");
+    wrap.replaceChildren(head, body);
+
+    if (this.stack.length >= maxEmbedDepth) {
+      // Past the limit the note is still named and still clickable; it just
+      // stops expanding.
+      body.append(h("div", "cm-fol-transclusion-deep", "Embedded too deeply to expand"));
+      return;
+    }
+
+    this.teardown = this.handlers.renderEmbedded(body, res.content ?? "", [...this.stack, path]);
+    if (res.truncated) {
+      body.append(h("div", "cm-fol-transclusion-deep", "Truncated; open the note to read the rest"));
+    }
+  }
+
+  destroy() {
+    this.teardown?.();
+    this.teardown = null;
+  }
+
+  ignoreEvent() {
+    return true;
+  }
+}
+
+/** A small element helper, so widget DOM reads as structure rather than noise. */
+function h(tag: string, className: string, text: string): HTMLElement {
+  const el = document.createElement(tag);
+  el.className = className;
+  el.textContent = text;
+  return el;
 }
 
 /** A real checkbox for a `- [ ]` task, which writes back to the document. */
@@ -243,7 +434,11 @@ export function overlaps(
  * file is not, and decorating the whole document on every keystroke is how these
  * editors get slow.
  */
-function buildDecorations(view: EditorView, handlers: LivePreviewHandlers): DecorationSet {
+function buildDecorations(
+  view: EditorView,
+  handlers: LivePreviewHandlers,
+  stack: string[],
+): DecorationSet {
   const active = activeLineRanges(view.state);
   const out: Range<Decoration>[] = [];
 
@@ -264,7 +459,7 @@ function buildDecorations(view: EditorView, handlers: LivePreviewHandlers): Deco
       from,
       to,
       enter(node: SyntaxNodeRef) {
-        return decorateNode(view, node, out, conceal, replaceWith, handlers);
+        return decorateNode(view, node, out, conceal, replaceWith, handlers, stack);
       },
     });
   }
@@ -281,6 +476,7 @@ function decorateNode(
   conceal: (from: number, to: number) => void,
   replaceWith: (from: number, to: number, deco: Decoration) => void,
   handlers: LivePreviewHandlers,
+  stack: string[],
 ): boolean | void {
   const doc = view.state.doc;
   const name = node.name;
@@ -358,11 +554,28 @@ function decorateNode(
       const parts = wikilinkParts(view.state, node);
       if (!parts) return;
       const src = handlers.resolveEmbed(parts.target);
-      if (!src) return; // an embed of a note, not an image; leave it as source
+      if (src) {
+        // An image resolves without asking the server, which keeps the common
+        // case off the network.
+        replaceWith(
+          node.from,
+          node.to,
+          Decoration.replace({
+            widget: new ImageWidget(src, parts.target, parseEmbedSize(parts.alias)),
+            block: false,
+          }),
+        );
+        return;
+      }
+      // Everything else is a note to transclude or a file to link, and only the
+      // server can say which.
       replaceWith(
         node.from,
         node.to,
-        Decoration.replace({ widget: new ImageWidget(src, parts.target), block: false }),
+        Decoration.replace({
+          widget: new TransclusionWidget(parts.target, parts.anchor, stack, handlers),
+          block: false,
+        }),
       );
       return;
     }
@@ -465,7 +678,7 @@ function decorateNode(
 export function wikilinkParts(
   state: EditorState,
   node: SyntaxNodeRef,
-): { target: string; anchor: string; label: string } | null {
+): { target: string; anchor: string; label: string; alias: string } | null {
   let target = "";
   let anchor = "";
   let alias = "";
@@ -477,27 +690,27 @@ export function wikilinkParts(
   }
   if (!target && !anchor) return null;
   const label = alias || (target ? target.split("/").pop()! : anchor);
-  return { target, anchor, label };
+  return { target, anchor, label, alias };
 }
 
 /**
  * The live-preview extension. Add it to make the editor render; remove it, via
  * the mode compartment, to see raw markdown.
  */
-export function livePreview(handlers: LivePreviewHandlers) {
+export function livePreview(handlers: LivePreviewHandlers, stack: string[] = []) {
   return ViewPlugin.fromClass(
     class {
       decorations: DecorationSet;
 
       constructor(view: EditorView) {
-        this.decorations = buildDecorations(view, handlers);
+        this.decorations = buildDecorations(view, handlers, stack);
       }
 
       update(update: ViewUpdate) {
         // The selection matters as much as the document: moving the cursor onto
         // a line has to reveal that line's syntax.
         if (update.docChanged || update.selectionSet || update.viewportChanged) {
-          this.decorations = buildDecorations(update.view, handlers);
+          this.decorations = buildDecorations(update.view, handlers, stack);
         }
       }
     },
