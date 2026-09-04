@@ -10,8 +10,15 @@ nix develop
 make test           # Go and frontend suites
 make race           # Go suite under the race detector
 make check          # what CI runs
+make icons          # re-render the app icons from their SVG sources
 nix flake check     # builds everything, runs the Go tests
 ```
+
+`make icons` is the only one that is not part of a build. The PNG icons are
+committed rather than generated, because they change about once a year and
+rendering SVG needs a toolchain neither the Go nor the node build otherwise
+wants. Edit `web/icons/icon.svg` or `web/icons/icon-maskable.svg`, run it, and
+commit the PNGs alongside.
 
 ## Layout
 
@@ -34,11 +41,19 @@ internal/
   client/           Go client for the JSON API, including the event stream
   tui/              the terminal client: model, key table, markdown renderer
   tsserve/          tsnet bootstrap; the only package that imports tailscale
-web/src/            CodeMirror 6 editor
-  markdown-ext.ts     Lezer parsers for [[wikilinks]] and #tags
-  livepreview.ts      the decorations that render markdown in place
-  editor.ts           CodeMirror setup and the preview/source compartment
-  app.ts              sidebar, routing, autosave, search palette
+web/
+  manifest.webmanifest  the web app manifest: name, icons, shortcuts
+  icons/                SVG sources and the PNGs rendered from them
+  shell.mjs             which files the worker precaches, and this build's id
+  build.mjs             two esbuild entry points: the app, then the worker
+  src/                  CodeMirror 6 editor
+    markdown-ext.ts       Lezer parsers for [[wikilinks]] and #tags
+    livepreview.ts        the decorations that render markdown in place
+    editor.ts             CodeMirror setup and the preview/source compartment
+    app.ts                sidebar, routing, autosave, search palette
+    pwa.ts                registration, the update offer, the install hint
+    sw.ts                 the service worker
+    sw-policy.ts          what the worker does with a request, as a function
 ```
 
 ## Why the code looks like this
@@ -54,6 +69,25 @@ bare `.cm-*` selector of ours loses silently: that is how the caret ended up as
 CodeMirror's 1.2px black hairline. jsdom does not implement cascade specificity,
 so it cannot tell a working stylesheet from a broken one; the invariant is
 checked against the source instead.
+
+The service worker is split in two for the same reason. `sw.ts` has to be
+compiled against the WebWorker library rather than the DOM one, so it gets its
+own `tsconfig.sw.json` and cannot be imported by a test that touches the DOM.
+The decision it makes on every request, though, depends on nothing but a method,
+a mode and a URL, so that lives in `sw-policy.ts` where a test can reach it. The
+cases that matter are not subtle: a cached `POST` loses a note, a cached `/api`
+response shows somebody another user's vault, and an intercepted `/api/events`
+hangs the worker on a stream that never ends.
+
+The worker's cache is named after a hash of everything in `dist/`, which is why
+there is no cache-busting policy anywhere: a build that differs by a byte reads
+from a cache that is empty, and the old one is deleted on activate. `shell.mjs`
+computes both that id and the precache list, and is tested, because the one
+thing it gets to decide is a trap. The shell is precached as `/`, not
+`/index.html`: Go's file server redirects the latter to the former, a fetch
+follows the redirect, and browsers refuse to answer a navigation with a response
+flagged as redirected, so precaching the redirecting URL would break the offline
+launch the worker exists for.
 
 Where an attachment goes, what it is called, and what link to write for it are
 all decided in `internal/notes`, not in either editor. They look like client

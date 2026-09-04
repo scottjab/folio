@@ -2,11 +2,37 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- viewport-fit=cover lets the page paint under the notch and the home
+       indicator; style.css then pays that back with env(safe-area-inset-*)
+       padding. Without it an installed iOS app gets letterboxed by white bars.
+       user-scalable is left alone deliberately: pinch-zoom is an accessibility
+       feature, and the inputs are sized so iOS has no reason to zoom on focus. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="light dark">
+  <!-- Paints the iOS status bar and the Android task switcher to match the page.
+       Two tags with media queries, because a manifest theme_color is a single
+       fixed value and folio follows the system theme. -->
+  <meta name="theme-color" content="#fdfdfc" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#16171a" media="(prefers-color-scheme: dark)">
   <title>folio</title>
+
+  <link rel="manifest" href="/manifest.webmanifest">
+
+  <!-- Standalone mode. The manifest covers Android and desktop; Safari still
+       reads the apple-prefixed pair, and "default" keeps the web view below the
+       status bar so the theme-color above is what shows there. -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="folio">
+  <!-- iOS turns bare numbers into tappable phone links inside notes. -->
+  <meta name="format-detection" content="telephone=no">
+
   <link rel="stylesheet" href="/app.css">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📝</text></svg>">
+  <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="/icons/icon-192.png" type="image/png" sizes="192x192">
+  <!-- iOS ignores the manifest icons for the home screen and takes this one. -->
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 </head>
 <body>
   <div id="app" class="app is-loading">

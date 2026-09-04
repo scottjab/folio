@@ -81,6 +81,9 @@
             pkgs.sqlite
             pkgs.tailscale
             pkgs.jq
+            # For `make icons`, which re-renders the app's PNG icons from their
+            # SVG sources. Not part of any build: the PNGs are committed.
+            pkgs.imagemagick
           ];
 
           shellHook = ''

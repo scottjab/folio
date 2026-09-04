@@ -108,6 +108,11 @@ func (a *API) withSecurityHeaders(next http.Handler) http.Handler {
 			"img-src 'self' data: blob:",
 			"font-src 'self' data:",
 			"connect-src 'self'",
+			// The service worker and the manifest. Both would fall back to
+			// default-src anyway; naming them means a later loosening of
+			// default-src cannot quietly widen what folio will install.
+			"worker-src 'self'",
+			"manifest-src 'self'",
 			"frame-ancestors 'none'",
 			"base-uri 'none'",
 			"form-action 'none'",

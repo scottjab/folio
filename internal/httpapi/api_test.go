@@ -45,7 +45,11 @@ var (
 	taggedWho = identity.WhoIs{Tags: []string{"tag:ci"}, NodeName: "builder"}
 )
 
-func newHarness(t *testing.T) *harness {
+// newHarness builds an API over a temporary state directory. The options run
+// against the Deps just before New, which is how a test that cares about
+// something New would otherwise default (the static file server, say) gets to
+// supply it.
+func newHarness(t *testing.T, opts ...func(*httpapi.Deps)) *harness {
 	t.Helper()
 	dir := t.TempDir()
 
@@ -68,14 +72,18 @@ func newHarness(t *testing.T) *harness {
 	h.bus = events.NewBus()
 	h.ident = identity.NewResolver(db, h.whois, identity.Options{})
 
-	api := httpapi.New(httpapi.Deps{
+	deps := httpapi.Deps{
 		DB: db, Index: h.ix, Vaults: h.vaults,
 		Identity: h.ident, Shares: h.shares, Bus: h.bus,
 		// PeerAddr exists because the tailnet peer address is not always
 		// r.RemoteAddr: the dev listener needs to override it too. Here it lets
 		// each test pick which tailnet user is calling.
 		PeerAddr: func(r *http.Request) string { return r.Header.Get("X-Test-Peer") + ":40000" },
-	})
+	}
+	for _, o := range opts {
+		o(&deps)
+	}
+	api := httpapi.New(deps)
 
 	h.api = api
 

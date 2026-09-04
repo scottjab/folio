@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="folio">
+  <!-- The rounded variant: browser tabs, bookmarks, and the manifest's "any"
+       purpose, where the platform draws the icon as given. -->
+  <rect width="512" height="512" rx="114" fill="#4a6fa5"/>
+  <path d="M158 112h154l64 64v202a22 22 0 0 1-22 22H158a22 22 0 0 1-22-22V134a22 22 0 0 1 22-22z" fill="#fdfdfc"/>
+  <path d="M312 112l64 64h-46a18 18 0 0 1-18-18z" fill="#c3d0e4"/>
+  <g fill="#4a6fa5">
+    <rect x="176" y="222" width="160" height="20" rx="10"/>
+    <rect x="176" y="266" width="160" height="20" rx="10"/>
+    <rect x="176" y="310" width="104" height="20" rx="10"/>
+  </g>
+</svg>

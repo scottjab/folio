@@ -19,7 +19,9 @@ import {
 import type { EmbedResult } from "./livepreview";
 import { Autosave } from "./autosave";
 import { Editor, Mode } from "./editor";
+import { InstallOffer, offerInstall, registerServiceWorker, watchConnection } from "./pwa";
 import { Route, Router } from "./router";
+import { readStored, writeStored } from "./storage";
 import { isImagePath, VaultIndex } from "./vault-index";
 
 export class App {
@@ -42,6 +44,10 @@ export class App {
   private savingKey: string | null = null;
   private sidebarOpen = false;
   private width: Width = "full";
+  // Set while the offline banner is up, so coming back online clears that
+  // banner and not whatever error happened to replace it in the meantime.
+  private offlineBannerUp = false;
+  private stopWatchingConnection: (() => void) | null = null;
   // Resolved embeds, keyed by vault, note, target and anchor. Cleared whenever
   // the vault changes, which is the only thing that can invalidate one.
   private embedCache = new Map<string, Promise<EmbedResult>>();
@@ -89,18 +95,101 @@ export class App {
       if (document.visibilityState === "hidden") this.autosave.flush();
     });
 
+    this.setupInstalledApp();
     this.router.start();
+    this.applyLaunchIntent();
     this.el.root.classList.remove("is-loading");
+  }
+
+  /**
+   * The parts of the app that only exist because folio can be installed.
+   *
+   * Each of these is a no-op in a browser that cannot do it, so nothing here
+   * has to be feature-detected at the call site.
+   */
+  private setupInstalledApp() {
+    registerServiceWorker({
+      onUpdateReady: (apply) =>
+        this.showBanner("A new version of folio is ready.", "info", {
+          label: "Reload",
+          // The reload discards anything the editor has not saved, so flush
+          // first. It is the same trade beforeunload makes, made on purpose.
+          run: () => {
+            this.autosave.flush();
+            apply();
+          },
+        }),
+    });
+
+    this.stopWatchingConnection = watchConnection((online) => this.onConnectionChange(online));
+
+    // Both of these land in the one banner, so they are ordered by which is
+    // worth reading: a dropped connection over an offer to install. Reaching
+    // here offline at all takes the network going away between api.me()
+    // answering and now, but that is the moment the offer would be least
+    // welcome.
+    if (navigator.onLine) offerInstall((offer) => this.offerInstall(offer));
+    else this.onConnectionChange(false);
+  }
+
+  /** Shows, or takes down, the standing "you are offline" warning. */
+  private onConnectionChange(online: boolean) {
+    if (online) {
+      // Only clear a banner we put up. Anything else on screen is a real error
+      // that has not been dealt with yet.
+      if (this.offlineBannerUp) this.hideBanner();
+      this.offlineBannerUp = false;
+      return;
+    }
+    this.offlineBannerUp = true;
+    this.showBanner(
+      "You are offline. folio cannot reach the server, so nothing will save until the connection is back.",
+      "warn",
+    );
+  }
+
+  /** Mentions that folio can be installed, at most once ever. */
+  private offerInstall(offer: InstallOffer) {
+    if (offer.prompt) {
+      this.showBanner("folio can be installed as an app on this device.", "info", {
+        label: "Install",
+        run: offer.prompt,
+      });
+      return;
+    }
+    this.showBanner(offer.hint, "info");
+  }
+
+  /**
+   * Acts on a manifest shortcut, such as the home screen's long-press menu.
+   *
+   * There is no shortcut for today's note because there does not need to be:
+   * start_url is "/", and "/" already opens it.
+   *
+   * The query is stripped afterwards so that a refresh, or the back button,
+   * does not open the palette a second time.
+   */
+  private applyLaunchIntent() {
+    const open = new URLSearchParams(window.location.search).get("open");
+    if (!open) return;
+    history.replaceState(null, "", window.location.pathname);
+    if (open === "new") void this.createNote();
+    if (open === "search") this.openPalette();
   }
 
   private fatal(err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     const hint =
-      err instanceof ApiError && err.status === 503
-        ? "folio could not reach tailscaled to work out who you are. It is usually back within a few seconds."
-        : err instanceof ApiError && err.status === 403
-          ? "This connection has no tailnet user behind it. Tagged nodes need an agent mapping in the config."
-          : "";
+      // Offline first: a network failure is what an installed app hits every
+      // time it is opened away from the tailnet, and "failed to fetch" on its
+      // own reads like folio is broken.
+      !navigator.onLine
+        ? "This device is offline. folio keeps every note on the server, so it needs the connection back before it can show you anything."
+        : err instanceof ApiError && err.status === 503
+          ? "folio could not reach tailscaled to work out who you are. It is usually back within a few seconds."
+          : err instanceof ApiError && err.status === 403
+            ? "This connection has no tailnet user behind it. Tagged nodes need an agent mapping in the config."
+            : "";
     this.el.root.innerHTML = "";
     this.el.root.className = "app app-error";
     const box = div("error-box");
@@ -853,7 +942,7 @@ export class App {
 
   private showBanner(
     message: string,
-    kind: "warn" | "error",
+    kind: "info" | "warn" | "error",
     ...actions: Array<{ label: string; run: () => void }>
   ) {
     const banner = this.el.banner;
@@ -880,6 +969,7 @@ export class App {
 
   stop() {
     this.unsubscribe?.();
+    this.stopWatchingConnection?.();
     this.editor.destroy();
   }
 }
@@ -912,29 +1002,6 @@ const WIDTH_LABELS: Record<Width, string> = {
   comfortable: "Narrow",
   full: "Full",
 };
-
-/**
- * Reads a saved preference.
- *
- * localStorage throws rather than returning null in a private window or a
- * browser with site data blocked, and losing a layout preference is not worth
- * taking the app down for.
- */
-function readStored(key: string): string | null {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function writeStored(key: string, value: string) {
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    // Nothing to do: the preference simply will not survive a reload.
-  }
-}
 
 function describe(err: unknown): string {
   return err instanceof Error ? err.message : String(err);

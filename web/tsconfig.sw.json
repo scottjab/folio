@@ -1,0 +1,14 @@
+{
+  // The service worker cannot share the app's tsconfig: it needs the WebWorker
+  // library, and the two libraries declare enough of the same globals that
+  // loading both produces conflicts rather than a union. tsconfig.json excludes
+  // src/sw.ts for the same reason, which is why the exclude has to be cleared
+  // here as well as the include narrowed.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "WebWorker"],
+    "types": []
+  },
+  "include": ["src/sw.ts"],
+  "exclude": []
+}

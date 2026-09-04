@@ -3,6 +3,7 @@ package httpapi
 import (
 	"io/fs"
 	"net/http"
+	"path"
 	"strings"
 	"testing/fstest"
 )
@@ -24,17 +25,41 @@ func (a *API) staticHandler() http.Handler {
 		if f, err := a.Static.Open(p); err == nil {
 			f.Close()
 			// The bundle is content-hashed at build time, so it can be cached
-			// hard. index.html must not be, or a deploy never reaches anyone.
+			// hard. index.html must not be, or a deploy never reaches anyone,
+			// and neither must sw.js: it is the thing that decides what an
+			// installed app has cached, so it has to be revalidated every time.
 			if strings.HasPrefix(p, "assets/") {
 				w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 			} else {
 				w.Header().Set("Cache-Control", "no-cache")
+			}
+			if ct := contentTypeFor(p); ct != "" {
+				w.Header().Set("Content-Type", ct)
 			}
 			files.ServeHTTP(w, r)
 			return
 		}
 		a.serveIndex(w, r)
 	})
+}
+
+// contentTypeFor returns a Content-Type the standard library would not work
+// out, or "" to leave it to the file server.
+//
+// Only .webmanifest so far. Go's built-in extension table does not carry it, and
+// what is left is whatever /etc/mime.types happens to say on the host, so the
+// answer would differ between a developer's laptop and a NixOS container. An
+// unrecognised extension falls through to content sniffing, which sees JSON and
+// calls it text/plain; browsers mostly load the manifest anyway and complain in
+// the console, but "mostly" is not a good property for the file that decides
+// whether folio can be installed at all.
+func contentTypeFor(name string) string {
+	switch path.Ext(name) {
+	case ".webmanifest":
+		return "application/manifest+json"
+	default:
+		return ""
+	}
 }
 
 func (a *API) serveIndex(w http.ResponseWriter, r *http.Request) {

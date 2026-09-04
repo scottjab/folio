@@ -1,7 +1,7 @@
 # Everything here assumes `nix develop`, which pins Go 1.27 and Node 24.
 # Nothing depends on what happens to be on your PATH.
 
-.PHONY: all build embed test race lint fmt web check clean dev doctor nix-hashes
+.PHONY: all build embed test race lint fmt web icons check clean dev doctor nix-hashes
 
 all: web build
 
@@ -22,6 +22,19 @@ embed: web
 ## web: bundle the browser app
 web:
 	cd web && npm ci --no-audit --no-fund && npm run build
+
+## icons: re-render the app icons from their SVG sources
+# The PNGs are committed rather than generated at build time: they change about
+# once a year, and rendering SVG needs a toolchain the Go and node builds do not
+# otherwise want. Run this after editing either SVG. The maskable and Apple
+# icons are rendered flat, with no alpha, because both platforms compose them
+# onto their own mask and a transparent corner shows up as a hole.
+icons:
+	cd web/icons && \
+	  magick -background none icon.svg -resize 192x192 icon-192.png && \
+	  magick -background none icon.svg -resize 512x512 icon-512.png && \
+	  magick icon-maskable.svg -resize 512x512 -background '#4a6fa5' -alpha remove -alpha off icon-maskable-512.png && \
+	  magick icon-maskable.svg -resize 180x180 -background '#4a6fa5' -alpha remove -alpha off apple-touch-icon.png
 
 ## test: run the Go and frontend test suites
 test:

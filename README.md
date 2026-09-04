@@ -32,6 +32,12 @@ table, a tinted cursor line, and the backlinks bar](docs/web-editor.png)
   Sizing works too: `![[shot.png|300]]`. Where new attachments go is the same
   setting Obsidian has, and it lives on the server, so the browser and the
   terminal file things in the same place.
+- **Installs on a phone.** Add it to your home screen and folio opens full
+  screen with its own icon, no browser chrome, laid out around the notch and the
+  home indicator. It is a real progressive web app: a manifest, a service worker
+  that caches the app itself, and an update it offers rather than applies. Your
+  notes are never cached on the device; they live on the server, behind the
+  tailnet check, which is the point.
 - **Real full-text search.** SQLite FTS5 with BM25 ranking and highlighted
   snippets. `tag:go`, `path:Daily`, `"exact phrase"`, `prefix*`, `-exclusions`.
 - **Tailnet identity.** No passwords, no sessions, no cookies. folio asks
@@ -355,6 +361,35 @@ The terminal client has its own keys, above.
 | `[[` | link to a note, with completion |
 | `#` | tag, with completion |
 | drop / paste | upload a file or a screenshot and link it |
+
+## On a phone
+
+folio is installable. On iOS, open it in Safari and use Share → Add to Home
+Screen; folio says so once, the first time, and then never again. On Android or
+desktop Chrome the browser offers an Install button and folio offers one too.
+Either way you get an app with its own icon that opens full screen, and on iOS
+that is the only way to get one: Safari has no install API, which is why the
+hint exists at all.
+
+Installed, it lays out around the hardware. `viewport-fit=cover` plus
+`env(safe-area-inset-*)` means the page paints under the notch and the rounded
+corners while the text stays clear of them, the status bar takes the page's own
+background in both light and dark, and the fields are sized so iOS has no reason
+to zoom the page when you tap one. Pinch-zoom still works; disabling it is the
+usual way to stop that zoom, and it takes an accessibility feature with it.
+
+Offline, it opens. A service worker caches the app itself, so launching without
+a connection gets you folio saying it cannot reach the server rather than the
+browser's offline page. It caches nothing else. Notes are per-user and
+permission-checked on every read, and a copy of somebody's vault in a device
+cache is a copy outside the only thing that knows who may see it, so every
+`/api` request goes straight to the network and nothing is ever answered from a
+cache.
+
+Updates are offered, not applied. A new build installs in the background and
+waits; folio notices, says a new version is ready, and reloads when you say so.
+A worker that took over on its own would reload the page under whatever you were
+in the middle of typing.
 
 ## Links and attachments
 

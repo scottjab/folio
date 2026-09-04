@@ -6,7 +6,7 @@
   "scripts": {
     "build": "node build.mjs",
     "dev": "node build.mjs --watch",
-    "check": "tsc --noEmit",
+    "check": "tsc --noEmit && tsc -p tsconfig.sw.json --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
