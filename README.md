@@ -1,5 +1,7 @@
 # folio
 
+[![ci](https://github.com/scottjab/folio/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/scottjab/folio/actions/workflows/ci.yml)
+
 Self-hosted markdown notes on your tailnet, with an Obsidian-style editor and a
 full MCP server so your agents can work on the same notes you do.
 
