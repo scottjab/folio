@@ -29,7 +29,7 @@ import (
 )
 
 // Version is reported to clients during initialize.
-const Version = "0.1.3"
+const Version = "0.1.4"
 
 // Deps are the collaborators the MCP server needs.
 type Deps struct {

@@ -22,7 +22,7 @@
         buildGoModule = pkgs.buildGoModule.override { inherit go; };
 
         # Release number, bumped when cutting a release.
-        version = "0.1.3";
+        version = "0.1.4";
 
         # What the binary reports. Nix flakes cannot see git tags or run git,
         # so there is no git-describe here; instead we append the source's own
@@ -38,7 +38,7 @@
           pname = "folio-frontend";
           inherit version;
           src = ./web;
-          npmDepsHash = "sha256-RPj+NvTN/z/DEvbt+rwN2CmiCxe+zX4bmn8xu7y0dks=";
+          npmDepsHash = "sha256-QxRBxXaq+HDMFS0ANllJEVRiKwBBUvD7QgSdQU5mIjM=";
           dontNpmInstall = true;
           installPhase = ''
             runHook preInstall
