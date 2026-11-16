@@ -106,7 +106,8 @@
 
           shellHook = ''
             export GOTOOLCHAIN=local
-            echo "folio dev shell: $(go version)"
+            # stderr, so `nix develop -c cmd` output can be captured cleanly.
+            echo "folio dev shell: $(go version)" >&2
           '';
         };
 
