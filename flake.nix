@@ -3,12 +3,12 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    # go.mod requires go >= 1.27.3. go_1_27 in a floating nixpkgs is only as
+    # go.mod requires go >= 1.27.4. go_1_27 in a floating nixpkgs is only as
     # new as its latest patch release, so a stale lock (or a consumer that
     # follows its own nixpkgs) silently ships an older go and fails the build
     # with a confusing go.mod error. Pin the toolchain to a revision that is
-    # known to provide go 1.27.3 and bring it in as its own dependency.
-    go-nixpkgs.url = "github:NixOS/nixpkgs/02c087f3fe673c9e317f206a627cb6b910336dbe";
+    # known to provide go 1.27.4 and bring it in as its own dependency.
+    go-nixpkgs.url = "github:NixOS/nixpkgs/b349185bb79c7cf7ad8ea8c097931730bf473c71";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
