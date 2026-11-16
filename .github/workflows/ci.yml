@@ -1,0 +1,53 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# id-token lets the Determinate installer and Magic Nix Cache authenticate;
+# the cache itself lives in this repo's GitHub Actions cache.
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  # The same checks as `make check`, inside the flake's dev shell so CI gets the
+  # exact Go and Node the flake pins rather than whatever the runner has.
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: DeterminateSystems/nix-installer-action@v23
+      - uses: DeterminateSystems/magic-nix-cache-action@v15
+      - name: Warm the dev shell
+        run: nix develop -c go version
+      - name: Install frontend deps
+        run: nix develop -c bash -c 'cd web && npm ci --no-audit --no-fund'
+      - name: gofmt
+        run: |
+          out=$(nix develop -c gofmt -l cmd internal)
+          if [ -n "$out" ]; then echo "needs gofmt:"; echo "$out"; exit 1; fi
+      - name: go.mod is tidy
+        run: |
+          nix develop -c go mod tidy
+          git diff --exit-code go.mod go.sum
+      - name: make check
+        run: nix develop -c make check
+
+  # Builds the frontend and binary through nix, which is what catches a stale
+  # npmDepsHash or vendorHash, then evaluates the NixOS module and boots it in
+  # a VM. The VM test needs KVM, which the installer sets up on the runner.
+  nix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: DeterminateSystems/nix-installer-action@v23
+      - uses: DeterminateSystems/magic-nix-cache-action@v15
+      - name: nix flake check
+        run: nix flake check -L
