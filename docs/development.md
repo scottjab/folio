@@ -133,6 +133,17 @@ starts the actual SQLite store, vault, and HTTP handlers, then drives the model
 with keypresses and checks what reached the disk. The bugs a UI like this
 actually has all live at that seam, and a mock is exactly where they hide.
 
+`internal/e2e` goes one seam further out, to the one contract no fake can
+honour: that a real HTTP request crossing a real WireGuard connection arrives
+with a source address the WhoIs lookup can answer. It runs headscale (the
+self-hosted control server, as a subprocess) with a local DERP relay and STUN,
+joins tsnet nodes to it with preauth keys, boots folio through `tsserve` on the
+plain tailnet listener, and drives the JSON API through `internal/client` — the
+code the TUI runs. Identity provisioning, sharing between two users, agent
+tags, CSRF, MagicDNS name resolution, and the event stream are all exercised
+across the tailnet. The dev shell ships the `headscale` binary; without it, or
+under `-short`, the suite skips itself rather than failing.
+
 Screen geometry lives in one place, `layout` in `internal/tui/mouse.go`, because
 drawing and hit-testing computing it separately is how a click ends up opening
 the note above the one you pointed at. The mouse tests click literal columns and

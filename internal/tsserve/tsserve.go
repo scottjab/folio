@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,6 +35,11 @@ type Options struct {
 	StateDir string
 	// AuthKey is used only on first run. Later starts reuse the stored node key.
 	AuthKey string
+	// ControlURL points the node at a self-hosted control server such as
+	// headscale instead of the Tailscale-hosted one. Empty means the default.
+	// This is what makes the integration tests possible: the tests run their
+	// own control server and join every node to it.
+	ControlURL string
 	// Addr is the TLS listen address inside the tailnet.
 	Addr string
 	Log  *slog.Logger
@@ -63,9 +69,10 @@ func Start(ctx context.Context, opts Options) (*Server, error) {
 	}
 
 	ts := &tsnet.Server{
-		Hostname: opts.Hostname,
-		Dir:      opts.StateDir,
-		AuthKey:  opts.AuthKey,
+		Hostname:   opts.Hostname,
+		Dir:        opts.StateDir,
+		AuthKey:    opts.AuthKey,
+		ControlURL: opts.ControlURL,
 		// tsnet logs every DERP and netcheck detail at info. Route it to debug
 		// unless asked, so folio' own logs stay readable.
 		Logf: func(format string, args ...any) {
@@ -165,6 +172,18 @@ func (s *Server) URL(ctx context.Context) string {
 		return "https://" + s.opts.Hostname
 	}
 	return "https://" + strings.TrimSuffix(status.Self.DNSName, ".")
+}
+
+// IPs returns the node's own tailnet addresses (100.x and its fd7a: IPv6).
+// Callers that want to dial this node without going through DNS use these;
+// the tests do, because a test control server cannot hand out certificates
+// for a DNS name.
+func (s *Server) IPs(ctx context.Context) []netip.Addr {
+	status, err := s.lc.StatusWithoutPeers(ctx)
+	if err != nil {
+		return nil
+	}
+	return status.TailscaleIPs
 }
 
 // Close shuts the node down.

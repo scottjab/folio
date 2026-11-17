@@ -52,7 +52,7 @@
           pname = "folio";
           inherit version;
           src = ./.;
-          vendorHash = "sha256-ogx0sC/YIz7VGgY7FWfCWNs57AUAuHuPLXfVgyQkKeM=";
+          vendorHash = "sha256-qHRGfuXufZouALjgJ+H/FG26e2mHvd8Jzh3ea3Zad9k=";
 
           env.CGO_ENABLED = 0;
 
@@ -98,6 +98,10 @@
             pkgs.prefetch-npm-deps
             pkgs.sqlite
             pkgs.tailscale
+            # The tailnet integration tests (internal/e2e) run the real
+            # headscale control server as a subprocess. Tests skip politely
+            # when this is absent.
+            pkgs.headscale
             pkgs.jq
             # For `make icons`, which re-renders the app's PNG icons from their
             # SVG sources. Not part of any build: the PNGs are committed.
