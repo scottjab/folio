@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -52,6 +53,15 @@ type Config struct {
 	StateDir string `json:"stateDir"`
 	// Addr is the address tsnet listens on inside the tailnet.
 	Addr string `json:"addr"`
+	// ControlURL points the node at a self-hosted control server, such as
+	// headscale, instead of Tailscale's. Empty means Tailscale's.
+	ControlURL string `json:"controlURL"`
+	// PlainHTTP serves the app over plain HTTP on Addr instead of HTTPS with
+	// the tailnet's certificate. For control servers that cannot issue ts.net
+	// certificates, such as headscale. Traffic is still WireGuard-encrypted,
+	// but browsers treat a plain-HTTP origin as insecure, so the PWA, service
+	// worker and clipboard features stop working.
+	PlainHTTP bool `json:"plainHTTP"`
 	// LogLevel is one of debug, info, warn, error.
 	LogLevel string `json:"logLevel"`
 	// CacheTTL bounds how long a WhoIs answer is reused.
@@ -218,6 +228,11 @@ func (c *Config) Validate() error {
 		seen[a.Tag] = true
 		if a.ActAs == "" {
 			errs = append(errs, fmt.Errorf("agents[%d]: actAs must name a tailnet login", i))
+		}
+	}
+	if c.ControlURL != "" {
+		if u, err := url.Parse(c.ControlURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			errs = append(errs, fmt.Errorf("controlURL %q must be an http:// or https:// URL", c.ControlURL))
 		}
 	}
 	if c.DevAddr != "" && c.DevLogin == "" {

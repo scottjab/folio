@@ -13,13 +13,13 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"tailscale.com/client/local"
+	"tailscale.com/net/netns"
 	"tailscale.com/tsnet"
 
 	"github.com/scottjab/folio/internal/identity"
@@ -37,12 +37,13 @@ type Options struct {
 	AuthKey string
 	// ControlURL points the node at a self-hosted control server such as
 	// headscale instead of the Tailscale-hosted one. Empty means the default.
-	// This is what makes the integration tests possible: the tests run their
-	// own control server and join every node to it.
 	ControlURL string
-	// Addr is the TLS listen address inside the tailnet.
+	// Addr is the listen address inside the tailnet.
 	Addr string
-	Log  *slog.Logger
+	// PlainHTTP means the app is served over plain HTTP, so URL reports an
+	// http:// address. See config.Config.PlainHTTP.
+	PlainHTTP bool
+	Log       *slog.Logger
 	// Verbose passes tsnet's own chatty logs through. Off by default because
 	// they are voluminous and rarely what you want.
 	Verbose bool
@@ -67,6 +68,13 @@ func Start(ctx context.Context, opts Options) (*Server, error) {
 	if err := os.MkdirAll(opts.StateDir, 0o700); err != nil {
 		return nil, fmt.Errorf("create tsnet state dir: %w", err)
 	}
+
+	// tsnet runs in userspace, but by default it still tries to bind each of
+	// its sockets to the default-route interface. Without CAP_NET_ADMIN, which
+	// folio's unit deliberately does not have, that picks the wrong NIC on a
+	// multi-homed host and control becomes unreachable. Leaving the choice to
+	// the kernel's routing table is right for an unprivileged node.
+	netns.SetEnabled(false)
 
 	ts := &tsnet.Server{
 		Hostname:   opts.Hostname,
@@ -160,30 +168,23 @@ func (s *Server) ListenTLS() (net.Listener, error) {
 	return ln, nil
 }
 
-// ListenPlain returns a plain HTTP listener, used only to redirect to HTTPS.
+// ListenPlain returns a plain TCP listener inside the tailnet: the HTTPS
+// redirect on :80, or the app itself under PlainHTTP.
 func (s *Server) ListenPlain(addr string) (net.Listener, error) {
 	return s.ts.Listen("tcp", addr)
 }
 
 // URL is where the app can be reached.
 func (s *Server) URL(ctx context.Context) string {
+	scheme := "https://"
+	if s.opts.PlainHTTP {
+		scheme = "http://"
+	}
 	status, err := s.lc.StatusWithoutPeers(ctx)
 	if err != nil || status.Self == nil {
-		return "https://" + s.opts.Hostname
+		return scheme + s.opts.Hostname
 	}
-	return "https://" + strings.TrimSuffix(status.Self.DNSName, ".")
-}
-
-// IPs returns the node's own tailnet addresses (100.x and its fd7a: IPv6).
-// Callers that want to dial this node without going through DNS use these;
-// the tests do, because a test control server cannot hand out certificates
-// for a DNS name.
-func (s *Server) IPs(ctx context.Context) []netip.Addr {
-	status, err := s.lc.StatusWithoutPeers(ctx)
-	if err != nil {
-		return nil
-	}
-	return status.TailscaleIPs
+	return scheme + strings.TrimSuffix(status.Self.DNSName, ".")
 }
 
 // Close shuts the node down.
