@@ -169,11 +169,18 @@ desktop Obsidian at, and a rotating uid under `/var/lib/private` makes that
 needlessly awkward. Add your own account to the `folio` group to read them
 directly.
 
+On a self-hosted headscale tailnet, set `controlURL` to your headscale server.
+headscale can't issue ts.net certificates, so also set `plainHTTP = true` and
+`addr = ":80"`. Traffic is still encrypted by WireGuard, but browsers treat a
+plain-HTTP origin as insecure, so installing the app, offline use and the
+clipboard won't work.
+
 The unit is sandboxed hard: no capabilities at all (tsnet does its networking in
 userspace, with no TUN device), `ProtectSystem=strict` with the state directory
 as the only writable path, and a seccomp filter. `nix flake check` boots a VM and
 starts the service to prove none of that stops folio running, which is the
-failure that would otherwise only turn up on a real deploy.
+failure that would otherwise only turn up on a real deploy. A second VM test
+joins the service to a headscale tailnet and drives it from tailscaled peers.
 
 ## On disk
 

@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -52,12 +53,14 @@ func runServe(ctx context.Context, args []string) error {
 	defer a.Close()
 
 	ts, err := tsserve.Start(ctx, tsserve.Options{
-		Hostname: cfg.Hostname,
-		StateDir: cfg.TSNetDir(),
-		AuthKey:  cfg.AuthKey,
-		Addr:     cfg.Addr,
-		Log:      log,
-		Verbose:  verbose,
+		Hostname:   cfg.Hostname,
+		StateDir:   cfg.TSNetDir(),
+		AuthKey:    cfg.AuthKey,
+		ControlURL: cfg.ControlURL,
+		Addr:       cfg.Addr,
+		PlainHTTP:  cfg.PlainHTTP,
+		Log:        log,
+		Verbose:    verbose,
 	})
 	if err != nil {
 		return err
@@ -96,7 +99,7 @@ func runServe(ctx context.Context, args []string) error {
 		return err
 	}
 
-	ln, err := ts.ListenTLS()
+	ln, err := listen(ts, cfg)
 	if err != nil {
 		return err
 	}
@@ -110,7 +113,9 @@ func runServe(ctx context.Context, args []string) error {
 		// stay open indefinitely.
 	}
 
-	go serveRedirect(ctx, ts, cfg, log)
+	if !cfg.PlainHTTP {
+		go serveRedirect(ctx, ts, cfg, log)
+	}
 
 	url := ts.URL(ctx)
 	log.Info("folio is up", "url", url, "mcp", url+"/mcp", "state", cfg.StateDir)
@@ -131,6 +136,19 @@ func runServe(ctx context.Context, args []string) error {
 		api.Close()
 		return tsserve.Shutdown(srv, shutdownGrace, log)
 	}
+}
+
+// listen opens the app's own listener: HTTPS with the tailnet's certificate,
+// or plain HTTP when the control server cannot issue one.
+func listen(ts *tsserve.Server, cfg config.Config) (net.Listener, error) {
+	if cfg.PlainHTTP {
+		ln, err := ts.ListenPlain(cfg.Addr)
+		if err != nil {
+			return nil, fmt.Errorf("listen on %s: %w", cfg.Addr, err)
+		}
+		return ln, nil
+	}
+	return ts.ListenTLS()
 }
 
 // serveRedirect sends plain HTTP to HTTPS, so typing the bare hostname works.

@@ -133,6 +133,22 @@ starts the actual SQLite store, vault, and HTTP handlers, then drives the model
 with keypresses and checks what reached the disk. The bugs a UI like this
 actually has all live at that seam, and a mock is exactly where they hide.
 
+The tailnet itself is tested one seam further out, in a NixOS VM test
+(`nix/tailnet-test.nix`, run by `nix flake check` on Linux with KVM). It
+covers the one contract no fake can honour: that a real HTTP request crossing
+a real WireGuard connection arrives with a source address the WhoIs lookup can
+answer. It uses headscale's NixOS test kit for the control server, runs the
+real `services.folio` module and binary joined to it, and has tailscaled peers
+drive the JSON API with curl. Identity provisioning, sharing between two users,
+agent tags, CSRF, MagicDNS, and the event stream are all exercised across the
+tailnet, under the unit's real systemd sandbox. headscale cannot issue ts.net
+certificates, so the test runs folio with `controlURL` and `plainHTTP`. To run
+just that test:
+
+```sh
+nix build .#checks.x86_64-linux.tailnet -L
+```
+
 Screen geometry lives in one place, `layout` in `internal/tui/mouse.go`, because
 drawing and hit-testing computing it separately is how a click ends up opening
 the note above the one you pointed at. The mouse tests click literal columns and

@@ -10,9 +10,16 @@
     # known to provide go 1.27.4 and bring it in as its own dependency.
     go-nixpkgs.url = "github:NixOS/nixpkgs/b349185bb79c7cf7ad8ea8c097931730bf473c71";
     flake-utils.url = "github:numtide/flake-utils";
+    # Control server for the tailnet VM test (nix/tailnet-test.nix), via its
+    # NixOS test kit. Builds from source; the kit is newer than any release in
+    # nixpkgs. Following our nixpkgs is fine while it has the Go headscale's
+    # go.mod asks for.
+    headscale.url = "github:juanfont/headscale";
+    headscale.inputs.nixpkgs.follows = "nixpkgs";
+    headscale.inputs.flake-utils.follows = "flake-utils";
   };
 
-  outputs = { self, nixpkgs, go-nixpkgs, flake-utils }:
+  outputs = { self, nixpkgs, go-nixpkgs, flake-utils, headscale }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
@@ -146,6 +153,10 @@
         # hardening does not stop folio dead, which is the failure that would
         # otherwise turn up on a real deploy.
         // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+          # folio joined to a headscale tailnet, with peers driving the API
+          # across WireGuard. See nix/tailnet-test.nix.
+          tailnet = import ./nix/tailnet-test.nix { inherit pkgs self headscale; };
+
           nixos-vm = pkgs.testers.runNixOSTest {
             name = "folio-service";
 

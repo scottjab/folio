@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"tailscale.com/client/local"
+	"tailscale.com/net/netns"
 	"tailscale.com/tsnet"
 
 	"github.com/scottjab/folio/internal/identity"
@@ -34,9 +35,15 @@ type Options struct {
 	StateDir string
 	// AuthKey is used only on first run. Later starts reuse the stored node key.
 	AuthKey string
-	// Addr is the TLS listen address inside the tailnet.
+	// ControlURL points the node at a self-hosted control server such as
+	// headscale instead of the Tailscale-hosted one. Empty means the default.
+	ControlURL string
+	// Addr is the listen address inside the tailnet.
 	Addr string
-	Log  *slog.Logger
+	// PlainHTTP means the app is served over plain HTTP, so URL reports an
+	// http:// address. See config.Config.PlainHTTP.
+	PlainHTTP bool
+	Log       *slog.Logger
 	// Verbose passes tsnet's own chatty logs through. Off by default because
 	// they are voluminous and rarely what you want.
 	Verbose bool
@@ -62,10 +69,18 @@ func Start(ctx context.Context, opts Options) (*Server, error) {
 		return nil, fmt.Errorf("create tsnet state dir: %w", err)
 	}
 
+	// tsnet runs in userspace, but by default it still tries to bind each of
+	// its sockets to the default-route interface. Without CAP_NET_ADMIN, which
+	// folio's unit deliberately does not have, that picks the wrong NIC on a
+	// multi-homed host and control becomes unreachable. Leaving the choice to
+	// the kernel's routing table is right for an unprivileged node.
+	netns.SetEnabled(false)
+
 	ts := &tsnet.Server{
-		Hostname: opts.Hostname,
-		Dir:      opts.StateDir,
-		AuthKey:  opts.AuthKey,
+		Hostname:   opts.Hostname,
+		Dir:        opts.StateDir,
+		AuthKey:    opts.AuthKey,
+		ControlURL: opts.ControlURL,
 		// tsnet logs every DERP and netcheck detail at info. Route it to debug
 		// unless asked, so folio' own logs stay readable.
 		Logf: func(format string, args ...any) {
@@ -153,18 +168,23 @@ func (s *Server) ListenTLS() (net.Listener, error) {
 	return ln, nil
 }
 
-// ListenPlain returns a plain HTTP listener, used only to redirect to HTTPS.
+// ListenPlain returns a plain TCP listener inside the tailnet: the HTTPS
+// redirect on :80, or the app itself under PlainHTTP.
 func (s *Server) ListenPlain(addr string) (net.Listener, error) {
 	return s.ts.Listen("tcp", addr)
 }
 
 // URL is where the app can be reached.
 func (s *Server) URL(ctx context.Context) string {
+	scheme := "https://"
+	if s.opts.PlainHTTP {
+		scheme = "http://"
+	}
 	status, err := s.lc.StatusWithoutPeers(ctx)
 	if err != nil || status.Self == nil {
-		return "https://" + s.opts.Hostname
+		return scheme + s.opts.Hostname
 	}
-	return "https://" + strings.TrimSuffix(status.Self.DNSName, ".")
+	return scheme + strings.TrimSuffix(status.Self.DNSName, ".")
 }
 
 // Close shuts the node down.

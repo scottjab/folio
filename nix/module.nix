@@ -26,6 +26,8 @@ let
       addr = cfg.addr;
       git = { enabled = cfg.git.enable; quiet = cfg.git.quiet; gcEvery = cfg.git.gcEvery; };
     }
+    // lib.optionalAttrs (cfg.controlURL != null) { inherit (cfg) controlURL; }
+    // lib.optionalAttrs cfg.plainHTTP { inherit (cfg) plainHTTP; }
     // lib.optionalAttrs (cfg.agents != [ ]) { inherit (cfg) agents; }
     // cfg.settings
   );
@@ -57,6 +59,30 @@ in
         Address to listen on inside the tailnet. This is a tsnet address, not a
         host one: nothing is bound on the machine's own interfaces, so there is
         no firewall hole to open.
+      '';
+    };
+
+    controlURL = lib.mkOption {
+      type = lib.types.nullOr (lib.types.strMatching "https?://.+");
+      default = null;
+      example = "https://headscale.example.com";
+      description = ''
+        Control server to join instead of Tailscale's, such as a self-hosted
+        headscale. `null` means Tailscale's.
+      '';
+    };
+
+    plainHTTP = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = ''
+        Serve the app over plain HTTP on `addr` instead of HTTPS with the
+        tailnet's certificate. Needed on a control server that cannot issue
+        ts.net certificates, such as headscale. Set `addr` to `":80"` with it.
+
+        Traffic still crosses the tailnet encrypted by WireGuard, but browsers
+        treat a plain-HTTP origin as insecure, so installing the app, offline
+        use and the clipboard stop working.
       '';
     };
 

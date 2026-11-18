@@ -44,6 +44,8 @@ func TestLoadFile(t *testing.T) {
 		"stateDir": "/var/lib/folio",
 		"logLevel": "debug",
 		"cacheTTL": "45s",
+		"controlURL": "http://headscale",
+		"plainHTTP": true,
 		"agents": [{"tag": "tag:notes-agent", "actAs": "alice@github"}]
 	}`)
 
@@ -59,6 +61,9 @@ func TestLoadFile(t *testing.T) {
 	}
 	if c.CacheTTL.Duration() != 45*time.Second {
 		t.Errorf("CacheTTL = %v, want 45s", c.CacheTTL.Duration())
+	}
+	if c.ControlURL != "http://headscale" || !c.PlainHTTP {
+		t.Errorf("ControlURL, PlainHTTP = %q, %v", c.ControlURL, c.PlainHTTP)
 	}
 	if len(c.Agents) != 1 || c.Agents[0].Tag != "tag:notes-agent" || c.Agents[0].ActAs != "alice@github" {
 		t.Errorf("Agents = %+v", c.Agents)
@@ -132,6 +137,8 @@ func TestValidate(t *testing.T) {
 		{"agent without a user", func(c *config.Config) {
 			c.Agents = []config.Agent{{Tag: "tag:notes-agent"}}
 		}, "actAs"},
+		{"control URL without a scheme", func(c *config.Config) { c.ControlURL = "headscale.example.com" }, "controlURL"},
+		{"control URL with a bad scheme", func(c *config.Config) { c.ControlURL = "ftp://headscale" }, "controlURL"},
 		{"duplicate agent tag", func(c *config.Config) {
 			c.Agents = []config.Agent{
 				{Tag: "tag:a", ActAs: "alice@github"},
